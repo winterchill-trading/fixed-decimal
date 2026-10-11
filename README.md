@@ -7,7 +7,7 @@ allocation-free. Strings such as `"113377.5"` parse and print without rounding
 surprises. Values with more than 8 fractional digits are truncated toward zero on
 parse.
 
-Built with [OxCaml](https://oxcaml.org) and the Jane Street library stack (Core).
+Built with [OxCaml](https://oxcaml.org) and the Core library stack.
 
 ## API
 
