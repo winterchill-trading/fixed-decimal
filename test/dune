@@ -1,0 +1,8 @@
+(library
+ (name fixed_decimal_test)
+ (inline_tests
+  (flags
+   (:standard -source-tree-root .)))
+ (libraries core fixed_decimal yojson)
+ (preprocess
+  (pps ppx_jane)))

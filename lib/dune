@@ -1,0 +1,6 @@
+(library
+ (name fixed_decimal)
+ (public_name fixed-decimal)
+ (libraries core yojson ppx_yojson_conv_lib)
+ (preprocess
+  (pps ppx_jane ppx_yojson_conv)))
