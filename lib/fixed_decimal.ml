@@ -22,6 +22,9 @@ module type S = sig
   val neg : t -> t
   val abs : t -> t
   val scale : t -> by:int -> t
+  val mul : t -> t -> t
+  val div : t -> t -> t
+  val div_int : t -> int -> t
   val sum : t list -> t
   val is_zero : t -> bool
   val is_positive : t -> bool
@@ -82,6 +85,35 @@ let units_of_string_opt s =
 
 let pow10 n = Int.pow 10 n
 
+let mul_units a b =
+  let sign = if Bool.equal (a < 0) (b < 0) then 1 else -1 in
+  let a = Int.abs a
+  and b = Int.abs b in
+  (* Split both operands into integer and fractional parts so that every partial product
+     stays well inside 63 bits. *)
+  let a1 = a / units_per_one
+  and a0 = a % units_per_one
+  and b1 = b / units_per_one
+  and b0 = b % units_per_one in
+  sign * ((a1 * b1 * units_per_one) + (a1 * b0) + (a0 * b1) + (a0 * b0 / units_per_one))
+;;
+
+let div_units a b =
+  if b = 0 then raise_s [%message "Fixed_decimal.div_units: division by zero"];
+  let sign = if Bool.equal (a < 0) (b < 0) then 1 else -1 in
+  let a = Int.abs a
+  and b = Int.abs b in
+  (* Long division, one decimal digit at a time, so [r * 10] never overflows. *)
+  let rec loop q r digits =
+    if digits = 0
+    then q
+    else (
+      let r = r * 10 in
+      loop ((q * 10) + (r / b)) (r % b) (digits - 1))
+  in
+  sign * loop (a / b) (a % b) decimals
+;;
+
 let check_decimals decimals' =
   if decimals' < 0 || decimals' > decimals
   then raise_s [%message "Fixed_decimal: decimals out of range" (decimals' : int)]
@@ -125,6 +157,14 @@ module Make () = struct
   let neg = Int.neg
   let abs = Int.abs
   let scale t ~by = Int.( * ) t by
+  let mul = mul_units
+  let div = div_units
+
+  let div_int t n =
+    if Int.equal n 0 then raise_s [%message "Fixed_decimal.div_int: division by zero"];
+    Int.( / ) t n
+  ;;
+
   let sum = List.fold ~init:0 ~f:Int.( + )
   let is_zero t = Int.equal t 0
   let is_positive t = Int.( > ) t 0
@@ -166,4 +206,9 @@ module Make () = struct
         "Fixed_decimal.t_of_yojson: decimal string expected"
         json
   ;;
+end
+
+module Product (A : S) (B : S) (C : S) = struct
+  let mul a b = C.of_units (mul_units (A.to_units a) (B.to_units b))
+  let div c b = A.of_units (div_units (C.to_units c) (B.to_units b))
 end

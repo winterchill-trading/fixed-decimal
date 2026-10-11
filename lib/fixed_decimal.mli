@@ -42,6 +42,17 @@ module type S = sig
   val neg : t -> t
   val abs : t -> t
   val scale : t -> by:int -> t
+
+  (** [mul a b] is [a * b], truncated toward zero. Does not overflow for any result in
+      range. *)
+  val mul : t -> t -> t
+
+  (** [div a b] is [a / b], truncated toward zero. Raises if [b] is zero. *)
+  val div : t -> t -> t
+
+  (** [div_int t n] is [t / n], truncated toward zero. Raises if [n] is zero. *)
+  val div_int : t -> int -> t
+
   val sum : t list -> t
   val is_zero : t -> bool
   val is_positive : t -> bool
@@ -55,3 +66,27 @@ module type S = sig
 end
 
 module Make () : S
+
+(** {2 Unit arithmetic}
+
+    Every [S] instance counts units of [10^-8], so products and quotients can be computed
+    on the raw units. The helpers below are what [S.mul] and [S.div] use; they are exposed
+    for mixing distinct instances. *)
+
+(** [mul_units a b] is [a * b / 10^8], truncated toward zero. Partial products are split
+    so that no intermediate value overflows when the result fits in an [int]. *)
+val mul_units : int -> int -> int
+
+(** [div_units a b] is [a * 10^8 / b], truncated toward zero, computed by long division so
+    that no intermediate value overflows. Raises if [b = 0]. *)
+val div_units : int -> int -> int
+
+(** Products and quotients across three instances, e.g. [Product (Price) (Size) (Usd)] for
+    notional values. *)
+module Product (A : S) (B : S) (C : S) : sig
+  (** [mul a b] is [a * b] as a [C.t], truncated toward zero. *)
+  val mul : A.t -> B.t -> C.t
+
+  (** [div c b] is [c / b] as an [A.t], truncated toward zero. Raises if [b] is zero. *)
+  val div : C.t -> B.t -> A.t
+end
