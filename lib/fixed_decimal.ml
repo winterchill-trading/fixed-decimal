@@ -1,7 +1,7 @@
 open! Core
 
 module type S = sig
-  type t [@@deriving sexp, compare, equal, hash, yojson]
+  type t : immediate [@@deriving sexp, compare, equal, hash, yojson]
 
   include Comparable.S with type t := t
 

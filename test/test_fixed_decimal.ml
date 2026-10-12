@@ -322,3 +322,21 @@ let%expect_test "range limit is exact in units" =
     (true false)
     |}]
 ;;
+
+(* Fails to compile if [Decimal.t] is not known to be immediate. *)
+module _ : sig
+  type t : immediate [@@warning "-unused-type-declaration"]
+end =
+  Decimal
+
+let%expect_test "values are immediate" =
+  List.iter [ "0"; "1.5"; "-46116860184.27387903"; "46116860184.27387903" ] ~f:(fun s ->
+    printf "%s %b\n" s (Obj.is_int (Obj.repr (Decimal.of_string s))));
+  [%expect
+    {|
+    0 true
+    1.5 true
+    -46116860184.27387903 true
+    46116860184.27387903 true
+    |}]
+;;

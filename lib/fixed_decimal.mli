@@ -8,7 +8,9 @@
 open! Core
 
 module type S = sig
-  type t [@@deriving sexp, compare, equal, hash, yojson]
+  (** A count of [10^-8] units. [t] is an immediate [int] at runtime: values are never
+      boxed and arithmetic does not allocate. *)
+  type t : immediate [@@deriving sexp, compare, equal, hash, yojson]
 
   include Comparable.S with type t := t
 
