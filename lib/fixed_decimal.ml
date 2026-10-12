@@ -122,13 +122,30 @@ let div_units a b =
   let sign = if Bool.equal (a < 0) (b < 0) then 1 else -1 in
   let a = Int.abs a
   and b = Int.abs b in
-  (* Long division, one decimal digit at a time, so [r * 10] never overflows. *)
+  (* [10 * r / b] and [10 * r mod b] for a remainder too large to multiply by 10: add [r]
+     ten times modulo [b]. Every sum stays below [b], so nothing overflows. *)
+  let next_digit_slow r =
+    let rec go k digit acc =
+      if k = 0
+      then digit, acc
+      else if acc >= b - r
+      then go (k - 1) (digit + 1) (acc - (b - r))
+      else go (k - 1) digit (acc + r)
+    in
+    go 10 0 0
+  in
+  (* Long division, one decimal digit at a time. [r < b], so [r * 10] can only overflow
+     when [b] exceeds [max_value / 10]; such remainders take the slow path. *)
   let rec loop q r digits =
     if digits = 0
     then q
-    else (
+    else if r <= Int.max_value / 10
+    then (
       let r = r * 10 in
       loop ((q * 10) + (r / b)) (r % b) (digits - 1))
+    else (
+      let digit, r = next_digit_slow r in
+      loop ((q * 10) + digit) r (digits - 1))
   in
   sign * loop (a / b) (a % b) decimals
 ;;

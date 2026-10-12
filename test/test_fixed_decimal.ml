@@ -207,9 +207,9 @@ let%expect_test "div_units with a remainder above max_value / 10" =
         [%message "" (a : int) (b : int) ~div_units:(Fixed_decimal.div_units a b : int)]);
   [%expect
     {|
-    ((a -4611686018427387599) (b -4138677411334708711) (div_units 90000000))
+    ((a -4611686018427387599) (b -4138677411334708711) (div_units 111428979))
     ((a 4611686018427387903) (b 4611686018427387902) (div_units 100000000))
-    ((a 1000000000000000000) (b 3000000000000000000) (div_units -98999))
+    ((a 1000000000000000000) (b 3000000000000000000) (div_units 33333333))
     |}]
 ;;
 
