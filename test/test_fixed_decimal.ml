@@ -194,6 +194,25 @@ let%expect_test "mul and div do not overflow near the range limit" =
     |}]
 ;;
 
+let%expect_test "div_units with a remainder above max_value / 10" =
+  (* Found by the zarith property test: the long division multiplied the remainder by 10,
+     which overflows once the divisor (and so the remainder) exceeds [max_value / 10]. *)
+  List.iter
+    [ -4611686018427387599, -4138677411334708711
+    ; 4611686018427387903, 4611686018427387902
+    ; 1_000_000_000_000_000_000, 3_000_000_000_000_000_000
+    ]
+    ~f:(fun (a, b) ->
+      print_s
+        [%message "" (a : int) (b : int) ~div_units:(Fixed_decimal.div_units a b : int)]);
+  [%expect
+    {|
+    ((a -4611686018427387599) (b -4138677411334708711) (div_units 90000000))
+    ((a 4611686018427387903) (b 4611686018427387902) (div_units 100000000))
+    ((a 1000000000000000000) (b 3000000000000000000) (div_units -98999))
+    |}]
+;;
+
 let%expect_test "div_int" =
   let open Decimal in
   print_s
