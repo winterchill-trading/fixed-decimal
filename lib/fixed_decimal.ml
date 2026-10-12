@@ -52,7 +52,11 @@ let units_to_string units =
     sign ^ Int.to_string int_part ^ frac)
 ;;
 
-let units_of_string_opt s =
+type parse_error =
+  | Invalid
+  | Overflow
+
+let units_of_string s : (int, parse_error) Result.t =
   let negative, body =
     match String.chop_prefix s ~prefix:"-" with
     | Some body -> true, body
@@ -67,11 +71,13 @@ let units_of_string_opt s =
   if (String.is_empty int_part && String.is_empty frac_part)
      || (not (all_digits int_part))
      || not (all_digits frac_part)
-  then None
+  then Error Invalid
   else (
     let int_part = String.lstrip int_part ~drop:(Char.equal '0') in
-    if String.length int_part > 10
-    then None
+    (* Eleven significant digits already exceed the range, and stopping here keeps
+       [Int.of_string] from overflowing. *)
+    if String.length int_part > 11
+    then Error Overflow
     else (
       let whole = if String.is_empty int_part then 0 else Int.of_string int_part in
       let frac_part =
@@ -79,10 +85,17 @@ let units_of_string_opt s =
         then String.prefix frac_part decimals
         else frac_part ^ String.make (decimals - String.length frac_part) '0'
       in
-      let units = (whole * units_per_one) + Int.of_string frac_part in
-      Some (if negative then Int.neg units else units)))
+      let frac = Int.of_string frac_part in
+      (* [whole * units_per_one + frac] fits in an [int] exactly when [whole] is at most
+         [(max_value - frac) / units_per_one]. *)
+      if whole > (Int.max_value - frac) / units_per_one
+      then Error Overflow
+      else (
+        let units = (whole * units_per_one) + frac in
+        Ok (if negative then Int.neg units else units))))
 ;;
 
+let max_string = units_to_string Int.max_value
 let pow10 n = Int.pow 10 n
 
 let mul_units a b =
@@ -124,12 +137,14 @@ module Make () = struct
     type t = int [@@deriving compare, equal, hash]
 
     let to_string = units_to_string
-    let of_string_opt = units_of_string_opt
+    let of_string_opt s = Result.ok (units_of_string s)
 
     let of_string s =
-      match of_string_opt s with
-      | Some t -> t
-      | None -> raise_s [%message "Fixed_decimal.of_string: invalid decimal" s]
+      match units_of_string s with
+      | Ok units -> units
+      | Error Invalid -> raise_s [%message "Fixed_decimal.of_string: invalid decimal" s]
+      | Error Overflow ->
+        raise_s [%message "Fixed_decimal.of_string: value out of range" s ~max:max_string]
     ;;
 
     let sexp_of_t t = Sexp.Atom (to_string t)
@@ -193,11 +208,15 @@ module Make () = struct
   let t_of_yojson (json : Yojson.Safe.t) =
     match json with
     | `String s ->
-      (match of_string_opt s with
-       | Some t -> t
-       | None ->
+      (match units_of_string s with
+       | Ok units -> of_units units
+       | Error Invalid ->
          Ppx_yojson_conv_lib.Yojson_conv.of_yojson_error
            "Fixed_decimal.t_of_yojson: invalid decimal string"
+           json
+       | Error Overflow ->
+         Ppx_yojson_conv_lib.Yojson_conv.of_yojson_error
+           "Fixed_decimal.t_of_yojson: value out of range"
            json)
     | `Int i -> of_int i
     | `Float f -> of_float f

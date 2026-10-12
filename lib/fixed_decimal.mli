@@ -2,7 +2,8 @@
 
     Decimal strings (e.g. ["113377.5"]) are the usual wire encoding for prices, sizes and
     amounts. Values parsed with more than 8 fractional digits are truncated toward zero.
-    The range is roughly +/- 4.6e10. *)
+    The range is +/- 46116860184.27387903 (the magnitude of [max_int] in units of 10^-8);
+    larger values are rejected. *)
 
 open! Core
 
@@ -24,7 +25,7 @@ module type S = sig
   val of_int : int -> t
 
   (** Parses a decimal string such as ["-12.5"], ["0.001"] or ["100"]. Raises on malformed
-      input. *)
+      input or on a value outside the range. *)
   val of_string : string -> t
 
   val of_string_opt : string -> t option
