@@ -126,3 +126,7 @@ opam switch create 5.2.0+ox --repos ox=git+https://github.com/oxcaml/opam-reposi
 opam install . --deps-only --with-test
 dune build && dune test
 ```
+
+CI installs the opam dependencies through the shared
+[ox-setup](https://github.com/winterchill-trading/infra/blob/main/docs/ci.md) action, which
+caches the built opam switch between runs.
