@@ -93,6 +93,57 @@ let%expect_test "float conversion" =
   [%expect {| (0.1 2.5) |}]
 ;;
 
+let%expect_test "of_float on non-finite and signed zero input" =
+  let show f =
+    print_s
+      [%message
+        ""
+          ~input:(f : float)
+          ~result:
+            (Or_error.try_with (fun () -> Decimal.of_float f |> Decimal.to_units)
+             : int Or_error.t)]
+  in
+  List.iter
+    [ Float.nan
+    ; Float.infinity
+    ; Float.neg_infinity
+    ; -0.0
+    ; 0.0
+    ; 1e11
+    ; 0.000000004
+    ; 0.000000005
+    ; -0.000000005
+    ]
+    ~f:show;
+  [%expect
+    {|
+    ((input NAN)
+     (result
+      (Error
+       (Invalid_argument
+        "Float.iround_nearest_exn: argument (nan) is too small or NaN"))))
+    ((input INF)
+     (result
+      (Error
+       (Invalid_argument "Float.iround_nearest_exn: argument (inf) is too large"))))
+    ((input -INF)
+     (result
+      (Error
+       (Invalid_argument
+        "Float.iround_nearest_exn: argument (-inf) is too small or NaN"))))
+    ((input -0) (result (Ok 0)))
+    ((input 0) (result (Ok 0)))
+    ((input 100000000000)
+     (result
+      (Error
+       (Invalid_argument
+        "Float.iround_nearest_exn: argument (10000000000000000000.000000) is too large"))))
+    ((input 4E-09) (result (Ok 0)))
+    ((input 5E-09) (result (Ok 1)))
+    ((input -5E-09) (result (Ok 0)))
+    |}]
+;;
+
 let%expect_test "mul and div truncate toward zero" =
   let open Decimal in
   List.iter
