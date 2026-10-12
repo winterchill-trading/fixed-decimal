@@ -340,3 +340,40 @@ let%expect_test "values are immediate" =
     46116860184.27387903 true
     |}]
 ;;
+
+let%expect_test "mul, div and Product do not allocate" =
+  let minor_words f =
+    let before = Gc.minor_words () in
+    for _ = 1 to 1000 do
+      f ()
+    done;
+    Gc.minor_words () - before
+  in
+  let a = Price.of_string "1891.4"
+  and px = Price.of_string "113377.5"
+  and sz = Size.of_string "0.00123"
+  and usd = Usd.of_string "139.454325" in
+  print_s
+    [%message
+      ""
+        ~empty:(minor_words (fun () -> ()) : int)
+        ~mul:
+          (minor_words (fun () ->
+             ignore (Price.mul (Sys.opaque_identity a) (Sys.opaque_identity px) : Price.t))
+           : int)
+        ~div:
+          (minor_words (fun () ->
+             ignore (Price.div (Sys.opaque_identity a) (Sys.opaque_identity px) : Price.t))
+           : int)
+        ~product_mul:
+          (minor_words (fun () ->
+             ignore
+               (Notional.mul (Sys.opaque_identity px) (Sys.opaque_identity sz) : Usd.t))
+           : int)
+        ~product_div:
+          (minor_words (fun () ->
+             ignore
+               (Notional.div (Sys.opaque_identity usd) (Sys.opaque_identity sz) : Price.t))
+           : int)];
+  [%expect {| ((empty 0) (mul 0) (div 0) (product_mul 0) (product_div 0)) |}]
+;;
