@@ -88,7 +88,7 @@ let%expect_test "json" =
 let%expect_test "float conversion" =
   print_s
     [%sexp
-      (Decimal.of_float 0.1 : Decimal.t)
+      (Decimal.of_float 0.1 [@alert "-lossy"] : Decimal.t)
       , (Decimal.to_float (Decimal.of_string "2.5") : float)];
   [%expect {| (0.1 2.5) |}]
 ;;
@@ -100,7 +100,8 @@ let%expect_test "of_float on non-finite and signed zero input" =
         ""
           ~input:(f : float)
           ~result:
-            (Or_error.try_with (fun () -> Decimal.of_float f |> Decimal.to_units)
+            (Or_error.try_with (fun () ->
+               (Decimal.of_float f [@alert "-lossy"]) |> Decimal.to_units)
              : int Or_error.t)]
   in
   List.iter

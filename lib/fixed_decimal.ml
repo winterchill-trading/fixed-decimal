@@ -15,7 +15,13 @@ module type S = sig
   val of_string : string -> t
   val of_string_opt : string -> t option
   val to_string : t -> string
+
   val of_float : float -> t
+  [@@alert
+    lossy
+      "Fixed_decimal.of_float rounds binary floats and raises on NaN, infinity or out of \
+       range input; prefer of_string."]
+
   val to_float : t -> float
   val ( + ) : t -> t -> t
   val ( - ) : t -> t -> t

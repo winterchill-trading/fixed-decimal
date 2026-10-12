@@ -34,8 +34,17 @@ module type S = sig
       ["-12.5"]. *)
   val to_string : t -> string
 
-  (** Rounds to the nearest unit. *)
+  (** [of_float f] rounds [f * 10^8] to the nearest unit. Binary floats rarely hold a
+      decimal exactly, so the result can differ from the decimal the float was printed
+      from, and halfway cases are not rounded symmetrically. [-0.0] gives [zero]. Raises
+      [Invalid_argument] if [f] is NaN, infinite or outside the range. Prefer [of_string]
+      for wire values; silence the alert with [[@alert "-lossy"]] where a float input is
+      intended. *)
   val of_float : float -> t
+  [@@alert
+    lossy
+      "Fixed_decimal.of_float rounds binary floats and raises on NaN, infinity or out of \
+       range input; prefer of_string."]
 
   val to_float : t -> float
   val ( + ) : t -> t -> t
