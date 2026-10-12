@@ -183,3 +183,71 @@ let%expect_test "Product mixes instances" =
   [%expect
     {| ((notional -139.454325) (avg_px 113377.5) (raw 300000000) (raw_div 33333333)) |}]
 ;;
+
+let%expect_test "integer parts beyond 10 digits" =
+  let show s =
+    printf
+      "%s -> %s\n"
+      s
+      (Option.value_map (Decimal.of_string_opt s) ~default:"None" ~f:(fun t ->
+         Decimal.to_string t ^ " units=" ^ Int.to_string (Decimal.to_units t)))
+  in
+  List.iter [ "10974030132.99"; "-10974030132.99" ] ~f:show;
+  [%expect
+    {|
+    10974030132.99 -> 10974030132.99 units=1097403013299000000
+    -10974030132.99 -> -10974030132.99 units=-1097403013299000000
+    |}]
+;;
+
+let%expect_test "range limit: just below and just above max_int units" =
+  let show s =
+    print_s
+      [%sexp (Or_error.try_with (fun () -> Decimal.of_string s) : Decimal.t Or_error.t)]
+  in
+  List.iter
+    [ "46116860184.27387903"
+    ; "46116860184.27387904"
+    ; "-46116860184.27387903"
+    ; "-46116860184.27387904"
+    ; "46116860184.99999999999"
+    ; "46116860185"
+    ; "100000000000"
+    ]
+    ~f:show;
+  [%expect
+    {|
+    (Ok 46116860184.27387903)
+    (Error
+     ("Fixed_decimal.of_string: value out of range" 46116860184.27387904
+      (max 46116860184.27387903)))
+    (Ok -46116860184.27387903)
+    (Error
+     ("Fixed_decimal.of_string: value out of range" -46116860184.27387904
+      (max 46116860184.27387903)))
+    (Error
+     ("Fixed_decimal.of_string: value out of range" 46116860184.99999999999
+      (max 46116860184.27387903)))
+    (Error
+     ("Fixed_decimal.of_string: value out of range" 46116860185
+      (max 46116860184.27387903)))
+    (Error
+     ("Fixed_decimal.of_string: value out of range" 100000000000
+      (max 46116860184.27387903)))
+    |}]
+;;
+
+let%expect_test "range limit is exact in units" =
+  let max = Decimal.of_units Int.max_value in
+  print_endline (Decimal.to_string max);
+  print_s [%sexp (Decimal.of_string "-46116860184.27387903" |> Decimal.to_units : int)];
+  print_s
+    [%sexp
+      (Decimal.of_string_opt "46116860184.27387903" |> Option.is_some : bool)
+      , (Decimal.of_string_opt "46116860184.27387904" |> Option.is_some : bool)];
+  [%expect {|
+    46116860184.27387903
+    -4611686018427387903
+    (true false)
+    |}]
+;;
