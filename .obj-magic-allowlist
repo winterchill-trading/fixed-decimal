@@ -1,0 +1,2 @@
+# Checks that decimals stay immediate values at runtime.
+test/test_fixed_decimal.ml
