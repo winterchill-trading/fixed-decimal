@@ -1,0 +1,5 @@
+File "price_as_size.ml", line 7, characters 18-34:
+7 | let _ = size_only (Price.of_int 1)
+                      ^^^^^^^^^^^^^^^^
+Error: This expression has type "Price.t"
+       but an expression was expected of type "Size.t"

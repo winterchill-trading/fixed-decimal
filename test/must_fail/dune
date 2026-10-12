@@ -1,0 +1,23 @@
+; Compiling price_as_size.ml must fail with a type error; the compiler output is
+; compared against price_as_size.expected.
+
+(rule
+ (deps %{cmi:../../lib/fixed_decimal})
+ (action
+  (with-outputs-to
+   price_as_size.output
+   (with-accepted-exit-codes
+    2
+    (run
+     %{ocamlc}
+     -c
+     -I
+     ../../lib/.fixed_decimal.objs/byte
+     -o
+     price_as_size.cmo
+     %{dep:price_as_size.ml})))))
+
+(rule
+ (alias runtest)
+ (action
+  (diff price_as_size.expected price_as_size.output)))
