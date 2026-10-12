@@ -13,4 +13,6 @@
   ppx_jane
   ppx_yojson_conv
   yojson
-  (zarith :with-test)))
+  (zarith :with-test)
+  (core_bench :with-test)
+  (core_unix :with-test)))

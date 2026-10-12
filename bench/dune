@@ -1,0 +1,6 @@
+(executable
+ (name bench)
+ (optional)
+ (libraries core core_bench core_unix.command_unix fixed_decimal)
+ (preprocess
+  (pps ppx_jane)))

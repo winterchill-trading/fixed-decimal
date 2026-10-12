@@ -12,6 +12,8 @@ depends: [
   "ppx_yojson_conv"
   "yojson"
   "zarith" {with-test}
+  "core_bench" {with-test}
+  "core_unix" {with-test}
   "odoc" {with-doc}
 ]
 build: [
