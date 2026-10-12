@@ -11,6 +11,7 @@ depends: [
   "ppx_jane"
   "ppx_yojson_conv"
   "yojson"
+  "zarith" {with-test}
   "odoc" {with-doc}
 ]
 build: [

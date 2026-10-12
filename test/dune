@@ -3,6 +3,6 @@
  (inline_tests
   (flags
    (:standard -source-tree-root .)))
- (libraries core fixed_decimal yojson)
+ (libraries core fixed_decimal yojson zarith)
  (preprocess
   (pps ppx_jane)))
