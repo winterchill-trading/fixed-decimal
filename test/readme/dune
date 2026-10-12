@@ -1,0 +1,14 @@
+; Every ```ocaml block in README.md must appear verbatim in test/test_readme.ml, where
+; it runs as an expect test.
+
+(executable
+ (name check_readme)
+ (libraries core))
+
+(rule
+ (alias runtest)
+ (action
+  (run
+   %{exe:check_readme.exe}
+   %{dep:../../README.md}
+   %{dep:../test_readme.ml})))

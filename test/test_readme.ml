@@ -1,4 +1,5 @@
-(* The README examples, verbatim. *)
+(* The README examples, verbatim; test/readme checks that every ocaml block in README.md
+   still appears here. *)
 
 open! Core
 module Price = Fixed_decimal.Make ()
