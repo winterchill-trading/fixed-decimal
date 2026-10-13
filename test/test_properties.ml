@@ -218,3 +218,26 @@ let%expect_test "generated decimal strings mix valid, invalid and out of range" 
   |> print_s;
   [%expect {| ((invalid 437) (out_of_range 101) (valid 462)) |}]
 ;;
+
+let%test_unit "to_string and blit_to_bytes agree with the reference printer" =
+  let buf = Bytes.create (Price.max_string_length + 8) in
+  Quickcheck.test
+    (Quickcheck.Generator.tuple2 gen_units (Int.gen_incl 0 8))
+    ~sexp_of:[%sexp_of: int * int]
+    ~trials:50_000
+    ~examples:
+      [ 0, 0; 1, 0; -1, 0; 100_000_000, 0; -Int.max_value, 0; Int.max_value, 8; 10, 3 ]
+    ~f:(fun (units, pos) ->
+      let expected = Fixed_decimal.Reference.units_to_string units in
+      let t = Price.of_units units in
+      let len = Price.blit_to_bytes t buf ~pos in
+      let blitted = Bytes.To_string.sub buf ~pos ~len in
+      if not
+           (String.equal (Price.to_string t) expected
+            && String.equal blitted expected
+            && Price.string_length t = String.length expected
+            && len <= Price.max_string_length)
+      then
+        raise_s
+          [%message "printer" (units : int) expected (Price.to_string t : string) blitted])
+;;
