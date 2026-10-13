@@ -278,7 +278,7 @@ let[@zero_alloc] units_of_substring_exn s ~pos ~len =
 
 let pow10 n = Int.pow 10 n
 
-let mul_units a b =
+let[@zero_alloc] mul_units a b =
   let sign = if Bool.equal (a < 0) (b < 0) then 1 else -1 in
   let a = Int.abs a
   and b = Int.abs b in
@@ -291,37 +291,40 @@ let mul_units a b =
   sign * ((a1 * b1 * units_per_one) + (a1 * b0) + (a0 * b1) + (a0 * b0 / units_per_one))
 ;;
 
-let div_units a b =
-  if b = 0 then raise_s [%message "Fixed_decimal.div_units: division by zero"];
+let[@cold] raise_division_by_zero () =
+  raise_s [%message "Fixed_decimal.div_units: division by zero"]
+;;
+
+let[@zero_alloc] div_units a b =
+  if b = 0 then raise_division_by_zero ();
   let sign = if Bool.equal (a < 0) (b < 0) then 1 else -1 in
   let a = Int.abs a
   and b = Int.abs b in
-  (* [10 * r / b] and [10 * r mod b] for a remainder too large to multiply by 10: add [r]
-     ten times modulo [b]. Every sum stays below [b], so nothing overflows. *)
-  let next_digit_slow r =
-    let rec go k digit acc =
-      if k = 0
-      then digit, acc
-      else if acc >= b - r
-      then go (k - 1) (digit + 1) (acc - (b - r))
-      else go (k - 1) digit (acc + r)
-    in
-    go 10 0 0
-  in
   (* Long division, one decimal digit at a time. [r < b], so [r * 10] can only overflow
-     when [b] exceeds [max_value / 10]; such remainders take the slow path. *)
-  let rec loop q r digits =
-    if digits = 0
-    then q
-    else if r <= Int.max_value / 10
+     when [b] exceeds [max_value / 10]; such remainders take the slow path, which adds [r]
+     ten times modulo [b]. Every sum there stays below [b], so nothing overflows. *)
+  let mutable q = a / b in
+  let mutable r = a % b in
+  for _ = 1 to decimals do
+    if r <= Int.max_value / 10
     then (
-      let r = r * 10 in
-      loop ((q * 10) + (r / b)) (r % b) (digits - 1))
+      let r10 = r * 10 in
+      q <- (q * 10) + (r10 / b);
+      r <- r10 % b)
     else (
-      let digit, r = next_digit_slow r in
-      loop ((q * 10) + digit) r (digits - 1))
-  in
-  sign * loop (a / b) (a % b) decimals
+      let mutable digit = 0 in
+      let mutable acc = 0 in
+      for _ = 1 to 10 do
+        if acc >= b - r
+        then (
+          digit <- digit + 1;
+          acc <- acc - (b - r))
+        else acc <- acc + r
+      done;
+      q <- (q * 10) + digit;
+      r <- acc)
+  done;
+  sign * q
 ;;
 
 let check_decimals decimals' =
