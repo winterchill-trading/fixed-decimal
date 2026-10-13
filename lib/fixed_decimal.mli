@@ -14,6 +14,20 @@ module type S = sig
 
   include Comparable.S with type t := t
 
+  (** The comparisons of [Comparable.S], restated to carry [[@@zero_alloc]]. *)
+  val compare : t -> t -> int
+  [@@zero_alloc]
+
+  val equal : t -> t -> bool [@@zero_alloc]
+  val ( = ) : t -> t -> bool [@@zero_alloc]
+  val ( <> ) : t -> t -> bool [@@zero_alloc]
+  val ( < ) : t -> t -> bool [@@zero_alloc]
+  val ( <= ) : t -> t -> bool [@@zero_alloc]
+  val ( > ) : t -> t -> bool [@@zero_alloc]
+  val ( >= ) : t -> t -> bool [@@zero_alloc]
+  val min : t -> t -> t [@@zero_alloc]
+  val max : t -> t -> t [@@zero_alloc]
+
   (** Number of fractional decimal digits (8). *)
   val decimals : int
 
