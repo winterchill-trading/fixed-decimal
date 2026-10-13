@@ -189,7 +189,10 @@ let%test_unit "of_substring_exn agrees with the reference parser" =
           |> Price.to_units)
       in
       let expected = Fixed_decimal.Reference.units_of_string s in
-      if not ([%equal: int option] actual expected)
+      let of_string_opt = Option.map (Price.of_string_opt s) ~f:Price.to_units in
+      if not
+           ([%equal: int option] actual expected
+            && [%equal: int option] of_string_opt expected)
       then
         raise_s
           [%message "of_substring_exn" s (actual : int option) (expected : int option)])

@@ -251,17 +251,14 @@ module Make () = struct
     type t = int [@@deriving compare, equal, hash]
 
     let to_string = units_to_string
-    let of_string_opt s = Result.ok (units_of_string s)
-    let[@zero_alloc] of_substring_exn s ~pos ~len = units_of_substring_exn s ~pos ~len
 
-    let of_string s =
-      match units_of_string s with
-      | Ok units -> units
-      | Error Invalid -> raise_s [%message "Fixed_decimal.of_string: invalid decimal" s]
-      | Error Overflow ->
-        raise_s [%message "Fixed_decimal.of_string: value out of range" s ~max:max_string]
+    let of_string_opt s =
+      let units = units_of_substring_or_min s ~pos:0 ~len:(String.length s) in
+      if units = Int.min_value then None else Some units
     ;;
 
+    let[@zero_alloc] of_substring_exn s ~pos ~len = units_of_substring_exn s ~pos ~len
+    let of_string s = units_of_substring_exn s ~pos:0 ~len:(String.length s)
     let sexp_of_t t = Sexp.Atom (to_string t)
 
     let t_of_sexp = function
@@ -323,7 +320,8 @@ module Make () = struct
   let t_of_yojson (json : Yojson.Safe.t) =
     match json with
     | `String s ->
-      (match units_of_string s with
+      let units = units_of_substring_or_min s ~pos:0 ~len:(String.length s) in
+      (match if units = Int.min_value then units_of_string s else Ok units with
        | Ok units -> of_units units
        | Error Invalid ->
          Ppx_yojson_conv_lib.Yojson_conv.of_yojson_error

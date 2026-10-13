@@ -409,7 +409,7 @@ let%expect_test "words per call of parsing and printing" =
            : int)];
   [%expect
     {|
-    ((of_string_price 14) (of_string_size 14) (to_string_price 48)
+    ((of_string_price 0) (of_string_size 0) (to_string_price 48)
      (to_string_size 48))
     |}]
 ;;
