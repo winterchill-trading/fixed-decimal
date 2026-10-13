@@ -105,7 +105,9 @@ let units_of_string s : (int, parse_error) Result.t =
 let max_string = units_to_string Int.max_value
 
 (* [10^(8 - k)] for [k] fractional digits read, [0 <= k <= 8]. *)
-let frac_scale = [| 100_000_000; 10_000_000; 1_000_000; 100_000; 10_000; 1_000; 100; 10; 1 |]
+let frac_scale =
+  [| 100_000_000; 10_000_000; 1_000_000; 100_000; 10_000; 1_000; 100; 10; 1 |]
+;;
 
 (* Same grammar and range as [units_of_string] over [s.[pos] .. s.[pos + len - 1]], in one
    pass and without allocating. Returns [Int.min_value], which is never a valid result
@@ -139,8 +141,7 @@ let[@zero_alloc] units_of_substring_or_min s ~pos ~len =
     i <- i + 1;
     if i < stop then c <- Char.to_int (String.unsafe_get s i)
   done;
-  (* Fractional part: the first eight digits count, the rest are validated and
-     truncated. *)
+  (* Fractional part: the first eight digits count, the rest are validated and truncated. *)
   let mutable frac = 0 in
   let mutable frac_digits = 0 in
   if i < stop && c = 46
@@ -172,7 +173,8 @@ let[@cold] raise_parse_error s ~pos ~len =
   match units_of_string s with
   | Error Overflow ->
     raise_s [%message "Fixed_decimal.of_string: value out of range" s ~max:max_string]
-  | Ok _ | Error Invalid -> raise_s [%message "Fixed_decimal.of_string: invalid decimal" s]
+  | Ok _ | Error Invalid ->
+    raise_s [%message "Fixed_decimal.of_string: invalid decimal" s]
 ;;
 
 let[@cold] raise_bounds s ~pos ~len =
@@ -190,6 +192,7 @@ let[@zero_alloc] units_of_substring_exn s ~pos ~len =
   if units = Int.min_value then raise_parse_error s ~pos ~len;
   units
 ;;
+
 let pow10 n = Int.pow 10 n
 
 let mul_units a b =

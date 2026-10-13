@@ -413,3 +413,50 @@ let%expect_test "words per call of parsing and printing" =
      (to_string_size 48))
     |}]
 ;;
+
+let%expect_test "of_substring_exn parses a field in place" =
+  let frame = {|{"p":"113377.5","q":"-0.00123","x":"1.123456789"}|} in
+  let field key =
+    let start = String.substr_index_exn frame ~pattern:(key ^ {|":"|}) + 4 in
+    let stop = String.index_from_exn frame start '"' in
+    Decimal.of_substring_exn frame ~pos:start ~len:(stop - start)
+  in
+  List.iter [ "p"; "q"; "x" ] ~f:(fun key ->
+    printf "%s %s\n" key (Decimal.to_string (field key)));
+  [%expect {|
+    p 113377.5
+    q -0.00123
+    x 1.12345678
+    |}];
+  let show ~pos ~len =
+    print_s
+      [%sexp
+        (Or_error.try_with (fun () -> Decimal.of_substring_exn "x12.5y" ~pos ~len)
+         : Decimal.t Or_error.t)]
+  in
+  show ~pos:1 ~len:4;
+  show ~pos:0 ~len:5;
+  show ~pos:1 ~len:0;
+  show ~pos:3 ~len:4;
+  show ~pos:(-1) ~len:2;
+  print_s
+    [%sexp
+      (Or_error.try_with (fun () ->
+         Decimal.of_substring_exn "[46116860184.27387904]" ~pos:1 ~len:20)
+       : Decimal.t Or_error.t)];
+  [%expect
+    {|
+    (Ok 12.5)
+    (Error ("Fixed_decimal.of_string: invalid decimal" x12.5))
+    (Error ("Fixed_decimal.of_string: invalid decimal" ""))
+    (Error
+     ("Fixed_decimal.of_substring_exn: range outside the string" (pos 3)
+      (len 4) (length 6)))
+    (Error
+     ("Fixed_decimal.of_substring_exn: range outside the string" (pos -1)
+      (len 2) (length 6)))
+    (Error
+     ("Fixed_decimal.of_string: value out of range" 46116860184.27387904
+      (max 46116860184.27387903)))
+    |}]
+;;
