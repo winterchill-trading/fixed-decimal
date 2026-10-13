@@ -15,7 +15,6 @@ module type S = sig
   val ( >= ) : t -> t -> bool [@@zero_alloc]
   val min : t -> t -> t [@@zero_alloc]
   val max : t -> t -> t [@@zero_alloc]
-
   val decimals : int
   val units_per_one : int
   val zero : t
@@ -381,7 +380,6 @@ module Make () = struct
   let[@zero_alloc] ( >= ) a b = Int.( >= ) a b
   let[@zero_alloc] min a b = Int.min a b
   let[@zero_alloc] max a b = Int.max a b
-
   let decimals = decimals
   let units_per_one = units_per_one
   let zero = 0

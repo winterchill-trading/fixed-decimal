@@ -36,12 +36,9 @@ module type S = sig
 
   val zero : t
   val one : t
-  val of_units : int -> t
-  [@@zero_alloc]
-  val to_units : t -> int
-  [@@zero_alloc]
-  val of_int : int -> t
-  [@@zero_alloc]
+  val of_units : int -> t [@@zero_alloc]
+  val to_units : t -> int [@@zero_alloc]
+  val of_int : int -> t [@@zero_alloc]
 
   (** Parses a decimal string such as ["-12.5"], ["0.001"] or ["100"]. Raises on malformed
       input or on a value outside the range. *)
@@ -86,16 +83,11 @@ module type S = sig
        range input; prefer of_string."]
 
   val to_float : t -> float
-  val ( + ) : t -> t -> t
-  [@@zero_alloc]
-  val ( - ) : t -> t -> t
-  [@@zero_alloc]
-  val neg : t -> t
-  [@@zero_alloc]
-  val abs : t -> t
-  [@@zero_alloc]
-  val scale : t -> by:int -> t
-  [@@zero_alloc]
+  val ( + ) : t -> t -> t [@@zero_alloc]
+  val ( - ) : t -> t -> t [@@zero_alloc]
+  val neg : t -> t [@@zero_alloc]
+  val abs : t -> t [@@zero_alloc]
+  val scale : t -> by:int -> t [@@zero_alloc]
 
   (** [mul a b] is [a * b], truncated toward zero. Does not overflow for any result in
       range. *)
@@ -111,12 +103,9 @@ module type S = sig
   [@@zero_alloc]
 
   val sum : t list -> t
-  val is_zero : t -> bool
-  [@@zero_alloc]
-  val is_positive : t -> bool
-  [@@zero_alloc]
-  val is_negative : t -> bool
-  [@@zero_alloc]
+  val is_zero : t -> bool [@@zero_alloc]
+  val is_positive : t -> bool [@@zero_alloc]
+  val is_negative : t -> bool [@@zero_alloc]
 
   (** Truncates toward zero to [decimals] fractional digits, [0 <= decimals <= 8]. *)
   val round_down : t -> decimals:int -> t
@@ -137,20 +126,24 @@ module Make () : S
 
 (** [mul_units a b] is [a * b / 10^8], truncated toward zero. Partial products are split
     so that no intermediate value overflows when the result fits in an [int]. *)
-val mul_units : int -> int -> int [@@zero_alloc]
+val mul_units : int -> int -> int
+[@@zero_alloc]
 
 (** [div_units a b] is [a * 10^8 / b], truncated toward zero, computed by long division so
     that no intermediate value overflows. Raises if [b = 0]. *)
-val div_units : int -> int -> int [@@zero_alloc]
+val div_units : int -> int -> int
+[@@zero_alloc]
 
 (** Products and quotients across three instances, e.g. [Product (Price) (Size) (Usd)] for
     notional values. *)
 module Product (A : S) (B : S) (C : S) : sig
   (** [mul a b] is [a * b] as a [C.t], truncated toward zero. *)
-  val mul : A.t -> B.t -> C.t [@@zero_alloc]
+  val mul : A.t -> B.t -> C.t
+  [@@zero_alloc]
 
   (** [div c b] is [c / b] as an [A.t], truncated toward zero. Raises if [b] is zero. *)
-  val div : C.t -> B.t -> A.t [@@zero_alloc]
+  val div : C.t -> B.t -> A.t
+  [@@zero_alloc]
 end
 
 (** The original parser and printer, built from string splitting and [sprintf]. Kept as
