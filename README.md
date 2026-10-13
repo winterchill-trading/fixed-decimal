@@ -22,10 +22,15 @@ A value of type `Make ().t` supports:
 
 - Construction and conversion: `zero`, `one`, `of_int`, `of_units`, `to_units`,
   `of_float`, `to_float`, `of_string`, `of_string_opt`, `to_string`.
+- In-place text: `of_substring_exn s ~pos ~len` parses a field inside a larger string
+  (a websocket frame, say) and `blit_to_bytes t buf ~pos` writes the decimal into a
+  caller's `Bytes` and returns its length; neither allocates. `string_length` and
+  `max_string_length` (21) size the buffer.
 - Arithmetic: `+`, `-`, `neg`, `abs`, `scale`, `sum`, and `mul`, `div`, `div_int`
   (truncating toward zero).
 - Predicates and ordering: `is_zero`, `is_positive`, `is_negative`, plus the
-  `Comparable` interface.
+  `Comparable` interface; `compare`, `equal`, the operators, `min` and `max` are plain
+  `int` comparisons.
 - Rounding: `round_down` (toward zero) and `round_nearest` (half away from zero), each
   to a given number of decimals.
 - Serialization: `sexp`, `compare`, `equal`, `hash`, and `yojson` (encoded as a decimal
@@ -100,18 +105,42 @@ let%expect_test "floats are opt-in" =
 
 ## Performance
 
-`t` is declared `[@@immediate]`: values are unboxed `int`s. `mul`, `div` and
-`Product` allocate nothing, which an expect test pins with `Gc.minor_words`. A
-`core_bench` benchmark compares them with plain `Int.( * )`:
+`t` is declared `[@@immediate]`: values are unboxed `int`s. The signature marks the
+arithmetic (`mul`, `div`, `div_int`, `scale`, rounding), the comparisons,
+`of_substring_exn`, `blit_to_bytes`, `string_length`, `mul_units`, `div_units` and
+`Product` with `[@@zero_alloc]`, so the compiler rejects a change that makes one of them
+allocate (error paths excepted). Expect tests pin the minor words per call with
+`Gc.minor_words`. `of_string` uses the same single-pass parser as `of_substring_exn`;
+the original string-splitting parser and `sprintf` printer stay as
+`Fixed_decimal.Reference`, and quickcheck tests hold the new code to them.
 
 ```sh
-dune exec bench/bench.exe -- -quota 2
+dune exec bench/bench.exe -- -quota 4
 ```
 
-On an Apple M-series laptop: `mul` about 5-8 ns, `div` about 26-31 ns, `Product.mul`
-about 7 ns, `Product.div` about 27 ns, against 2.4 ns for an empty closure. Every row
-shows the same 3 minor words as the empty closure, which is the harness's own
-overhead.
+`core_bench` on an Apple M-series laptop (arm64; CI runs amd64), in the dev profile,
+`--profile release` and release with `OCAMLPARAM='_,O3=1'`. Words are minor words per
+call, net of the harness's own 3 (the empty closure row):
+
+| Operation | dev | release | `-O3` | Words |
+| --- | ---: | ---: | ---: | ---: |
+| `mul` | 6 ns | 5 ns | 5 ns | 0 |
+| `div` | 30 ns | 23 ns | 23 ns | 0 |
+| `Product.mul` | 7-24 ns | 7 ns | 5 ns | 0 |
+| `Product.div` | 24-49 ns | 24 ns | 23 ns | 0 |
+| `compare` | 3 ns | 3 ns | 2.5 ns | 0 |
+| `of_string "113377.5"` | 20 ns | 18 ns | 16 ns | 0 |
+| `of_substring_exn` (price in a frame) | 15-26 ns | 17 ns | 16 ns | 0 |
+| `Reference.units_of_string` (old `of_string`) | 85 ns | 85 ns | 69 ns | 14 |
+| `to_string` (price) | 24 ns | 22 ns | 23 ns | 3 |
+| `blit_to_bytes` (price) | 15 ns | 15 ns | 14 ns | 0 |
+| `Reference.units_to_string` (old `to_string`) | 128 ns | 126 ns | 132 ns | 48 |
+| empty closure | 2.4 ns | 2.5-4 ns | 2.4 ns | 0 |
+
+Parsing went from 85 ns and 14 words to 18 ns and 0 words; printing from 126 ns and 48
+words to 22 ns and 3 words (the result string) or 15 ns and 0 words into a reused
+buffer. `div` dropped from 26-31 ns to 23 ns after its long division became a plain
+loop. Under 0.5 ns is noise, and these runs shared the machine with other builds.
 
 ## Tests
 
