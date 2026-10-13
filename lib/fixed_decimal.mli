@@ -32,6 +32,13 @@ module type S = sig
 
   val of_string_opt : string -> t option
 
+  (** [of_substring_exn s ~pos ~len] parses [String.sub s ~pos ~len] with the grammar and
+      range of [of_string], in one pass and without allocating, so a frame scanner can
+      parse a field in place. Raises on malformed input, on a value outside the range and
+      on a range outside [s]. *)
+  val of_substring_exn : string -> pos:int -> len:int -> t
+  [@@zero_alloc]
+
   (** Shortest decimal representation without trailing zeros, e.g. ["100"], ["0.001"],
       ["-12.5"]. *)
   val to_string : t -> string

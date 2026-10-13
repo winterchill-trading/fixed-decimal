@@ -14,6 +14,7 @@ module type S = sig
   val of_int : int -> t
   val of_string : string -> t
   val of_string_opt : string -> t option
+  val of_substring_exn : string -> pos:int -> len:int -> t [@@zero_alloc]
   val to_string : t -> string
 
   val of_float : float -> t
@@ -102,6 +103,93 @@ let units_of_string s : (int, parse_error) Result.t =
 ;;
 
 let max_string = units_to_string Int.max_value
+
+(* [10^(8 - k)] for [k] fractional digits read, [0 <= k <= 8]. *)
+let frac_scale = [| 100_000_000; 10_000_000; 1_000_000; 100_000; 10_000; 1_000; 100; 10; 1 |]
+
+(* Same grammar and range as [units_of_string] over [s.[pos] .. s.[pos + len - 1]], in one
+   pass and without allocating. Returns [Int.min_value], which is never a valid result
+   (the range is symmetric), on malformed or out of range input. The caller has checked
+   the bounds. *)
+let[@zero_alloc] units_of_substring_or_min s ~pos ~len =
+  let stop = pos + len in
+  let mutable i = pos in
+  let mutable negative = false in
+  if i < stop
+  then (
+    let c = String.unsafe_get s i in
+    if Char.equal c '-'
+    then (
+      negative <- true;
+      i <- i + 1)
+    else if Char.equal c '+'
+    then i <- i + 1);
+  (* Integer part: leading zeros are skipped; beyond eleven significant digits the value
+     is out of range, so later digits are only validated. *)
+  let mutable whole = 0 in
+  let mutable significant = 0 in
+  let mutable int_digits = 0 in
+  let mutable c = if i < stop then Char.to_int (String.unsafe_get s i) else 0 in
+  while i < stop && c >= 48 && c <= 57 do
+    if significant > 0 || c > 48
+    then (
+      significant <- significant + 1;
+      if significant <= 11 then whole <- (whole * 10) + (c - 48));
+    int_digits <- int_digits + 1;
+    i <- i + 1;
+    if i < stop then c <- Char.to_int (String.unsafe_get s i)
+  done;
+  (* Fractional part: the first eight digits count, the rest are validated and
+     truncated. *)
+  let mutable frac = 0 in
+  let mutable frac_digits = 0 in
+  if i < stop && c = 46
+  then (
+    i <- i + 1;
+    let mutable continue = true in
+    while continue && i < stop do
+      let c = Char.to_int (String.unsafe_get s i) in
+      if c >= 48 && c <= 57
+      then (
+        if frac_digits < decimals then frac <- (frac * 10) + (c - 48);
+        frac_digits <- frac_digits + 1;
+        i <- i + 1)
+      else continue <- false
+    done);
+  if i <> stop || (int_digits = 0 && frac_digits = 0) || significant > 11
+  then Int.min_value
+  else (
+    let frac = frac * Array.unsafe_get frac_scale (Int.min frac_digits decimals) in
+    if whole > (Int.max_value - frac) / units_per_one
+    then Int.min_value
+    else (
+      let units = (whole * units_per_one) + frac in
+      if negative then -units else units))
+;;
+
+let[@cold] raise_parse_error s ~pos ~len =
+  let s = String.sub s ~pos ~len in
+  match units_of_string s with
+  | Error Overflow ->
+    raise_s [%message "Fixed_decimal.of_string: value out of range" s ~max:max_string]
+  | Ok _ | Error Invalid -> raise_s [%message "Fixed_decimal.of_string: invalid decimal" s]
+;;
+
+let[@cold] raise_bounds s ~pos ~len =
+  raise_s
+    [%message
+      "Fixed_decimal.of_substring_exn: range outside the string"
+        (pos : int)
+        (len : int)
+        ~length:(String.length s : int)]
+;;
+
+let[@zero_alloc] units_of_substring_exn s ~pos ~len =
+  if pos < 0 || len < 0 || pos > String.length s - len then raise_bounds s ~pos ~len;
+  let units = units_of_substring_or_min s ~pos ~len in
+  if units = Int.min_value then raise_parse_error s ~pos ~len;
+  units
+;;
 let pow10 n = Int.pow 10 n
 
 let mul_units a b =
@@ -161,6 +249,7 @@ module Make () = struct
 
     let to_string = units_to_string
     let of_string_opt s = Result.ok (units_of_string s)
+    let[@zero_alloc] of_substring_exn s ~pos ~len = units_of_substring_exn s ~pos ~len
 
     let of_string s =
       match units_of_string s with
