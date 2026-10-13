@@ -377,3 +377,39 @@ let%expect_test "mul, div and Product do not allocate" =
            : int)];
   [%expect {| ((empty 0) (mul 0) (div 0) (product_mul 0) (product_div 0)) |}]
 ;;
+
+let%expect_test "words per call of parsing and printing" =
+  let words_per_call f =
+    let before = Gc.minor_words () in
+    for _ = 1 to 1000 do
+      f ()
+    done;
+    (Gc.minor_words () - before) / 1000
+  in
+  let px = Price.of_string "113377.5"
+  and sz = Size.of_string "0.00123" in
+  print_s
+    [%message
+      ""
+        ~of_string_price:
+          (words_per_call (fun () ->
+             ignore (Price.of_string (Sys.opaque_identity "113377.5") : Price.t))
+           : int)
+        ~of_string_size:
+          (words_per_call (fun () ->
+             ignore (Size.of_string (Sys.opaque_identity "0.00123") : Size.t))
+           : int)
+        ~to_string_price:
+          (words_per_call (fun () ->
+             ignore (Price.to_string (Sys.opaque_identity px) : string))
+           : int)
+        ~to_string_size:
+          (words_per_call (fun () ->
+             ignore (Size.to_string (Sys.opaque_identity sz) : string))
+           : int)];
+  [%expect
+    {|
+    ((of_string_price 14) (of_string_size 14) (to_string_price 48)
+     (to_string_size 48))
+    |}]
+;;
