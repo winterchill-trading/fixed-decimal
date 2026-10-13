@@ -206,26 +206,50 @@ let max_string_length = 21
 (* The printers work on the non-positive magnitude [-|units|], which exists for every
    [int] including [Int.min_value]. *)
 let[@zero_alloc] int_digit_count m =
-  let mutable m = m in
-  let mutable n = 1 in
-  while m <= -10 do
-    m <- m / 10;
-    n <- n + 1
-  done;
-  n
+  (* [m / units_per_one] is at least [-92233720368], eleven digits. *)
+  if m > -10
+  then 1
+  else if m > -100
+  then 2
+  else if m > -1_000
+  then 3
+  else if m > -10_000
+  then 4
+  else if m > -100_000
+  then 5
+  else if m > -1_000_000
+  then 6
+  else if m > -10_000_000
+  then 7
+  else if m > -100_000_000
+  then 8
+  else if m > -1_000_000_000
+  then 9
+  else if m > -10_000_000_000
+  then 10
+  else 11
 ;;
 
-(* Fractional digits left after dropping trailing zeros, and their value. *)
+(* Fractional digits left after dropping trailing zeros, and their value; [frac] is in
+   [0, 10^8). Zeros are dropped four, two and one at a time. *)
 let[@zero_alloc] frac_digits frac =
   if frac = 0
   then #(0, 0)
   else (
     let mutable f = frac in
     let mutable n = decimals in
-    while f % 10 = 0 do
+    if Int.rem f 10_000 = 0
+    then (
+      f <- f / 10_000;
+      n <- n - 4);
+    if Int.rem f 100 = 0
+    then (
+      f <- f / 100;
+      n <- n - 2);
+    if Int.rem f 10 = 0
+    then (
       f <- f / 10;
-      n <- n - 1
-    done;
+      n <- n - 1);
     #(n, f))
 ;;
 
@@ -266,7 +290,7 @@ let[@zero_alloc] units_blit_to_bytes units buf ~pos =
     Bytes.unsafe_set buf start '.';
     let mutable f = frac in
     for k = start + n_frac downto start + 1 do
-      Bytes.unsafe_set buf k (Char.unsafe_of_int (48 + (f % 10)));
+      Bytes.unsafe_set buf k (Char.unsafe_of_int (48 + Int.rem f 10));
       f <- f / 10
     done);
   len
