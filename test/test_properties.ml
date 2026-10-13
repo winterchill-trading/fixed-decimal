@@ -124,3 +124,94 @@ let%expect_test "most generated pairs are in range" =
         ~div_in_range:(count gen_div_pair ref_div : int)];
   [%expect {| ((mul_in_range 1000) (div_in_range 1000)) |}]
 ;;
+
+(* Decimal-like strings: mostly digits with signs, points and junk mixed in, valid printed
+   values, and long integer parts around the eleven-digit range edge. *)
+let gen_decimal_string =
+  let open Quickcheck.Generator in
+  let char =
+    weighted_union
+      [ 10., Char.gen_digit
+      ; 1., return '.'
+      ; 0.5, return '-'
+      ; 0.5, return '+'
+      ; 0.3, of_list [ ' '; 'e'; '0'; '"'; ','; '\x00' ]
+      ]
+  in
+  weighted_union
+    [ (4., Int.gen_incl 0 24 >>= fun n -> String.gen_with_length n char)
+    ; 2., gen_units >>| Fixed_decimal.Reference.units_to_string
+    ; ( 1.
+      , let%bind.Quickcheck.Generator sign = of_list [ ""; "-"; "+" ] in
+        let%bind.Quickcheck.Generator zeros = Int.gen_incl 0 3 in
+        let%bind.Quickcheck.Generator int_part =
+          Int.gen_incl 10 13 >>= fun n -> String.gen_with_length n Char.gen_digit
+        in
+        let%map.Quickcheck.Generator frac =
+          Int.gen_incl 0 12 >>= fun n -> String.gen_with_length n Char.gen_digit
+        in
+        sign
+        ^ String.make zeros '0'
+        ^ int_part
+        ^ if String.is_empty frac then "" else "." ^ frac )
+    ]
+;;
+
+let%test_unit "of_substring_exn agrees with the reference parser" =
+  Quickcheck.test
+    (Quickcheck.Generator.tuple3
+       gen_decimal_string
+       String.quickcheck_generator
+       String.quickcheck_generator)
+    ~sexp_of:[%sexp_of: string * string * string]
+    ~trials:50_000
+    ~examples:
+      [ "", "", ""
+      ; "-", "", ""
+      ; ".", "", ""
+      ; "-.", "", ""
+      ; "+-1", "", ""
+      ; "1.2.3", "", ""
+      ; "46116860184.27387903", "", ""
+      ; "46116860184.27387904", "", ""
+      ; "-46116860184.27387903", "", ""
+      ; "000000000000046116860184.273879039", "", ""
+      ; "99999999999", "", ""
+      ; "100000000000", "", ""
+      ; "5.", "x", "y"
+      ; ".5", "1", "2"
+      ]
+    ~f:(fun (s, prefix, suffix) ->
+      let framed = prefix ^ s ^ suffix in
+      let actual =
+        Option.try_with (fun () ->
+          Price.of_substring_exn framed ~pos:(String.length prefix) ~len:(String.length s)
+          |> Price.to_units)
+      in
+      let expected = Fixed_decimal.Reference.units_of_string s in
+      if not ([%equal: int option] actual expected)
+      then
+        raise_s
+          [%message "of_substring_exn" s (actual : int option) (expected : int option)])
+;;
+
+let%expect_test "generated decimal strings mix valid, invalid and out of range" =
+  Quickcheck.random_value
+    ~seed:(`Deterministic "fixed-decimal")
+    (Quickcheck.Generator.list_with_length 1000 gen_decimal_string)
+  |> List.map ~f:(fun s ->
+    match Fixed_decimal.Reference.units_of_string s with
+    | Some _ -> "valid"
+    | None ->
+      (match Price.of_string s with
+       | _ -> "valid"
+       | exception exn ->
+         if String.is_substring (Exn.to_string exn) ~substring:"out of range"
+         then "out_of_range"
+         else "invalid"))
+  |> List.sort_and_group ~compare:String.compare
+  |> List.map ~f:(fun group -> List.hd_exn group, List.length group)
+  |> [%sexp_of: (string * int) list]
+  |> print_s;
+  [%expect {| ((invalid 437) (out_of_range 101) (valid 462)) |}]
+;;

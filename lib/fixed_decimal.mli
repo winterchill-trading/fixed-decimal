@@ -110,8 +110,8 @@ module Product (A : S) (B : S) (C : S) : sig
   val div : C.t -> B.t -> A.t
 end
 
-(** The original parser and printer, built from string splitting and [sprintf]. Kept as the
-    reference the single-pass versions are tested against; not for hot paths. *)
+(** The original parser and printer, built from string splitting and [sprintf]. Kept as
+    the reference the single-pass versions are tested against; not for hot paths. *)
 module Reference : sig
   (** Units of a decimal string, [None] when [S.of_string] would raise. *)
   val units_of_string : string -> int option
