@@ -9,9 +9,9 @@ module type S = sig
   val units_per_one : int
   val zero : t
   val one : t
-  val of_units : int -> t
-  val to_units : t -> int
-  val of_int : int -> t
+  val of_units : int -> t [@@zero_alloc]
+  val to_units : t -> int [@@zero_alloc]
+  val of_int : int -> t [@@zero_alloc]
   val of_string : string -> t
   val of_string_opt : string -> t option
   val of_substring_exn : string -> pos:int -> len:int -> t [@@zero_alloc]
@@ -27,20 +27,20 @@ module type S = sig
        range input; prefer of_string."]
 
   val to_float : t -> float
-  val ( + ) : t -> t -> t
-  val ( - ) : t -> t -> t
-  val neg : t -> t
-  val abs : t -> t
-  val scale : t -> by:int -> t
-  val mul : t -> t -> t
-  val div : t -> t -> t
-  val div_int : t -> int -> t
+  val ( + ) : t -> t -> t [@@zero_alloc]
+  val ( - ) : t -> t -> t [@@zero_alloc]
+  val neg : t -> t [@@zero_alloc]
+  val abs : t -> t [@@zero_alloc]
+  val scale : t -> by:int -> t [@@zero_alloc]
+  val mul : t -> t -> t [@@zero_alloc]
+  val div : t -> t -> t [@@zero_alloc]
+  val div_int : t -> int -> t [@@zero_alloc]
   val sum : t list -> t
-  val is_zero : t -> bool
-  val is_positive : t -> bool
-  val is_negative : t -> bool
-  val round_down : t -> decimals:int -> t
-  val round_nearest : t -> decimals:int -> t
+  val is_zero : t -> bool [@@zero_alloc]
+  val is_positive : t -> bool [@@zero_alloc]
+  val is_negative : t -> bool [@@zero_alloc]
+  val round_down : t -> decimals:int -> t [@@zero_alloc]
+  val round_nearest : t -> decimals:int -> t [@@zero_alloc]
 end
 
 let decimals = 8
@@ -363,40 +363,40 @@ module Make () = struct
   let units_per_one = units_per_one
   let zero = 0
   let one = units_per_one
-  let of_units = Fn.id
-  let to_units = Fn.id
-  let of_int i = i * units_per_one
+  let[@zero_alloc] of_units t = t
+  let[@zero_alloc] to_units t = t
+  let[@zero_alloc] of_int i = i * units_per_one
   let of_float f = Float.iround_nearest_exn (f *. Float.of_int units_per_one)
   let to_float t = Float.of_int t /. Float.of_int units_per_one
-  let ( + ) = Int.( + )
-  let ( - ) = Int.( - )
-  let neg = Int.neg
-  let abs = Int.abs
-  let scale t ~by = Int.( * ) t by
-  let mul = mul_units
-  let div = div_units
+  let[@zero_alloc] ( + ) a b = Int.( + ) a b
+  let[@zero_alloc] ( - ) a b = Int.( - ) a b
+  let[@zero_alloc] neg t = Int.neg t
+  let[@zero_alloc] abs t = Int.abs t
+  let[@zero_alloc] scale t ~by = Int.( * ) t by
+  let[@zero_alloc] mul a b = mul_units a b
+  let[@zero_alloc] div a b = div_units a b
 
-  let div_int t n =
+  let[@zero_alloc] div_int t n =
     if Int.equal n 0 then raise_s [%message "Fixed_decimal.div_int: division by zero"];
     Int.( / ) t n
   ;;
 
   let sum = List.fold ~init:0 ~f:Int.( + )
-  let is_zero t = Int.equal t 0
-  let is_positive t = Int.( > ) t 0
-  let is_negative t = Int.( < ) t 0
+  let[@zero_alloc] is_zero t = Int.equal t 0
+  let[@zero_alloc] is_positive t = Int.( > ) t 0
+  let[@zero_alloc] is_negative t = Int.( < ) t 0
 
   let step ~decimals:d =
     check_decimals d;
     pow10 (Int.( - ) decimals d)
   ;;
 
-  let round_down t ~decimals:d =
+  let[@zero_alloc] round_down t ~decimals:d =
     let step = step ~decimals:d in
     Int.( * ) (Int.( / ) t step) step
   ;;
 
-  let round_nearest t ~decimals:d =
+  let[@zero_alloc] round_nearest t ~decimals:d =
     let step = step ~decimals:d in
     let half = Int.( / ) step 2 in
     let a = Int.abs t in

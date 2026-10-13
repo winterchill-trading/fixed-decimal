@@ -23,8 +23,11 @@ module type S = sig
   val zero : t
   val one : t
   val of_units : int -> t
+  [@@zero_alloc]
   val to_units : t -> int
+  [@@zero_alloc]
   val of_int : int -> t
+  [@@zero_alloc]
 
   (** Parses a decimal string such as ["-12.5"], ["0.001"] or ["100"]. Raises on malformed
       input or on a value outside the range. *)
@@ -70,31 +73,44 @@ module type S = sig
 
   val to_float : t -> float
   val ( + ) : t -> t -> t
+  [@@zero_alloc]
   val ( - ) : t -> t -> t
+  [@@zero_alloc]
   val neg : t -> t
+  [@@zero_alloc]
   val abs : t -> t
+  [@@zero_alloc]
   val scale : t -> by:int -> t
+  [@@zero_alloc]
 
   (** [mul a b] is [a * b], truncated toward zero. Does not overflow for any result in
       range. *)
   val mul : t -> t -> t
+  [@@zero_alloc]
 
   (** [div a b] is [a / b], truncated toward zero. Raises if [b] is zero. *)
   val div : t -> t -> t
+  [@@zero_alloc]
 
   (** [div_int t n] is [t / n], truncated toward zero. Raises if [n] is zero. *)
   val div_int : t -> int -> t
+  [@@zero_alloc]
 
   val sum : t list -> t
   val is_zero : t -> bool
+  [@@zero_alloc]
   val is_positive : t -> bool
+  [@@zero_alloc]
   val is_negative : t -> bool
+  [@@zero_alloc]
 
   (** Truncates toward zero to [decimals] fractional digits, [0 <= decimals <= 8]. *)
   val round_down : t -> decimals:int -> t
+  [@@zero_alloc]
 
   (** Rounds half away from zero to [decimals] fractional digits. *)
   val round_nearest : t -> decimals:int -> t
+  [@@zero_alloc]
 end
 
 module Make () : S
