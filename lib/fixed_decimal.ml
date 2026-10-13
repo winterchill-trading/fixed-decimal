@@ -453,8 +453,8 @@ module Make () = struct
 end
 
 module Product (A : S) (B : S) (C : S) = struct
-  let mul a b = C.of_units (mul_units (A.to_units a) (B.to_units b))
-  let div c b = A.of_units (div_units (C.to_units c) (B.to_units b))
+  let[@zero_alloc] mul a b = C.of_units (mul_units (A.to_units a) (B.to_units b))
+  let[@zero_alloc] div c b = A.of_units (div_units (C.to_units c) (B.to_units b))
 end
 
 module Reference = struct
