@@ -109,3 +109,12 @@ module Product (A : S) (B : S) (C : S) : sig
   (** [div c b] is [c / b] as an [A.t], truncated toward zero. Raises if [b] is zero. *)
   val div : C.t -> B.t -> A.t
 end
+
+(** The original parser and printer, built from string splitting and [sprintf]. Kept as the
+    reference the single-pass versions are tested against; not for hot paths. *)
+module Reference : sig
+  (** Units of a decimal string, [None] when [S.of_string] would raise. *)
+  val units_of_string : string -> int option
+
+  val units_to_string : int -> string
+end

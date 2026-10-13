@@ -346,3 +346,8 @@ module Product (A : S) (B : S) (C : S) = struct
   let mul a b = C.of_units (mul_units (A.to_units a) (B.to_units b))
   let div c b = A.of_units (div_units (C.to_units c) (B.to_units b))
 end
+
+module Reference = struct
+  let units_of_string s = Result.ok (units_of_string s)
+  let units_to_string = units_to_string
+end
