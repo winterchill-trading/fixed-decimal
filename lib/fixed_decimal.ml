@@ -16,6 +16,9 @@ module type S = sig
   val of_string_opt : string -> t option
   val of_substring_exn : string -> pos:int -> len:int -> t [@@zero_alloc]
   val to_string : t -> string
+  val max_string_length : int
+  val string_length : t -> int [@@zero_alloc]
+  val blit_to_bytes : t -> Bytes.t -> pos:int -> int [@@zero_alloc]
 
   val of_float : float -> t
   [@@alert
@@ -186,6 +189,86 @@ let[@cold] raise_bounds s ~pos ~len =
         ~length:(String.length s : int)]
 ;;
 
+(* ["-46116860184.27387903"]; [Int.min_value] units print one digit longer but in the same
+   width, ["-46116860184.27387904"]. *)
+let max_string_length = 21
+
+(* The printers work on the non-positive magnitude [-|units|], which exists for every
+   [int] including [Int.min_value]. *)
+let[@zero_alloc] int_digit_count m =
+  let mutable m = m in
+  let mutable n = 1 in
+  while m <= -10 do
+    m <- m / 10;
+    n <- n + 1
+  done;
+  n
+;;
+
+(* Fractional digits left after dropping trailing zeros, and their value. *)
+let[@zero_alloc] frac_digits frac =
+  if frac = 0
+  then #(0, 0)
+  else (
+    let mutable f = frac in
+    let mutable n = decimals in
+    while f % 10 = 0 do
+      f <- f / 10;
+      n <- n - 1
+    done;
+    #(n, f))
+;;
+
+let[@zero_alloc] units_string_length units =
+  let m = if units > 0 then -units else units in
+  let #(n_frac, _) = frac_digits (-Int.rem m units_per_one) in
+  (if units < 0 then 1 else 0)
+  + int_digit_count (m / units_per_one)
+  + if n_frac = 0 then 0 else 1 + n_frac
+;;
+
+let[@cold] raise_blit_bounds buf ~pos ~needed =
+  raise_s
+    [%message
+      "Fixed_decimal.blit_to_bytes: not enough room"
+        (pos : int)
+        (needed : int)
+        ~length:(Bytes.length buf : int)]
+;;
+
+let[@zero_alloc] units_blit_to_bytes units buf ~pos =
+  let m = if units > 0 then -units else units in
+  let int_part = m / units_per_one in
+  let #(n_frac, frac) = frac_digits (-Int.rem m units_per_one) in
+  let n_int = int_digit_count int_part in
+  let sign = if units < 0 then 1 else 0 in
+  let len = sign + n_int + if n_frac = 0 then 0 else 1 + n_frac in
+  if pos < 0 || pos > Bytes.length buf - len then raise_blit_bounds buf ~pos ~needed:len;
+  if sign = 1 then Bytes.unsafe_set buf pos '-';
+  let mutable q = int_part in
+  for k = pos + sign + n_int - 1 downto pos + sign do
+    Bytes.unsafe_set buf k (Char.unsafe_of_int (48 - Int.rem q 10));
+    q <- q / 10
+  done;
+  if n_frac > 0
+  then (
+    let start = pos + sign + n_int in
+    Bytes.unsafe_set buf start '.';
+    let mutable f = frac in
+    for k = start + n_frac downto start + 1 do
+      Bytes.unsafe_set buf k (Char.unsafe_of_int (48 + (f % 10)));
+      f <- f / 10
+    done);
+  len
+;;
+
+let units_to_string_fast units =
+  let len = units_string_length units in
+  let buf = Bytes.create len in
+  ignore (units_blit_to_bytes units buf ~pos:0 : int);
+  Bytes.unsafe_to_string ~no_mutation_while_string_reachable:buf
+;;
+
 let[@zero_alloc] units_of_substring_exn s ~pos ~len =
   if pos < 0 || len < 0 || pos > String.length s - len then raise_bounds s ~pos ~len;
   let units = units_of_substring_or_min s ~pos ~len in
@@ -250,7 +333,7 @@ module Make () = struct
   module T = struct
     type t = int [@@deriving compare, equal, hash]
 
-    let to_string = units_to_string
+    let to_string = units_to_string_fast
 
     let of_string_opt s =
       let units = units_of_substring_or_min s ~pos:0 ~len:(String.length s) in
@@ -259,6 +342,9 @@ module Make () = struct
 
     let[@zero_alloc] of_substring_exn s ~pos ~len = units_of_substring_exn s ~pos ~len
     let of_string s = units_of_substring_exn s ~pos:0 ~len:(String.length s)
+    let max_string_length = max_string_length
+    let[@zero_alloc] string_length t = units_string_length t
+    let[@zero_alloc] blit_to_bytes t buf ~pos = units_blit_to_bytes t buf ~pos
     let sexp_of_t t = Sexp.Atom (to_string t)
 
     let t_of_sexp = function

@@ -43,6 +43,19 @@ module type S = sig
       ["-12.5"]. *)
   val to_string : t -> string
 
+  (** Longest [to_string] result (21 bytes, e.g. ["-46116860184.27387903"]). *)
+  val max_string_length : int
+
+  (** [String.length (to_string t)], without allocating. *)
+  val string_length : t -> int
+  [@@zero_alloc]
+
+  (** [blit_to_bytes t buf ~pos] writes [to_string t] into [buf] at [pos] and returns the
+      number of bytes written, without allocating. A buffer of [max_string_length] bytes
+      holds any value. Raises if the text does not fit. *)
+  val blit_to_bytes : t -> Bytes.t -> pos:int -> int
+  [@@zero_alloc]
+
   (** [of_float f] rounds [f * 10^8] to the nearest unit. Binary floats rarely hold a
       decimal exactly, so the result can differ from the decimal the float was printed
       from, and halfway cases are not rounded symmetrically. [-0.0] gives [zero]. Raises
