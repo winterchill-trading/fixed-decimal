@@ -460,3 +460,46 @@ let%expect_test "of_substring_exn parses a field in place" =
       (max 46116860184.27387903)))
     |}]
 ;;
+
+let%expect_test "blit_to_bytes writes in place" =
+  let buf = Bytes.make 24 '_' in
+  let write units ~pos =
+    let len = Decimal.blit_to_bytes (Decimal.of_units units) buf ~pos in
+    printf "%-2d %s\n" len (Bytes.To_string.sub buf ~pos ~len)
+  in
+  write 11337750000000 ~pos:0;
+  write (-123000) ~pos:2;
+  write 0 ~pos:23;
+  write Int.max_value ~pos:3;
+  write Int.min_value ~pos:3;
+  print_s
+    [%sexp
+      (Or_error.try_with (fun () ->
+         Decimal.blit_to_bytes (Decimal.of_units (-123000)) buf ~pos:17)
+       : int Or_error.t)];
+  [%expect
+    {|
+    8  113377.5
+    8  -0.00123
+    1  0
+    20 46116860184.27387903
+    21 -46116860184.27387904
+    (Error
+     ("Fixed_decimal.blit_to_bytes: not enough room" (pos 17) (needed 8)
+      (length 24)))
+    |}];
+  let words =
+    let before = Gc.minor_words () in
+    for _ = 1 to 1000 do
+      ignore
+        (Decimal.blit_to_bytes
+           (Sys.opaque_identity (Decimal.of_units (-123000)))
+           buf
+           ~pos:0
+         : int)
+    done;
+    Gc.minor_words () - before
+  in
+  print_s [%message (words : int)];
+  [%expect {| (words 0) |}]
+;;
