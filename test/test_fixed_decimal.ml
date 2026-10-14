@@ -284,6 +284,14 @@ let%expect_test "division by zero raises" =
     |}]
 ;;
 
+let%expect_test "div_or_error" =
+  let open Decimal in
+  print_s
+    [%sexp
+      (div_or_error one (of_int 3) : t Or_error.t), (div_or_error one zero : t Or_error.t)];
+  [%expect {| ((Ok 0.33333333) (Error "Fixed_decimal.div: division by zero")) |}]
+;;
+
 module Price = Fixed_decimal.Make ()
 module Size = Fixed_decimal.Make ()
 module Usd = Fixed_decimal.Make ()
