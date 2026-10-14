@@ -1,13 +1,18 @@
 # fixed-decimal
 
-Fixed-point decimal numbers for trading systems.
+Exact fixed-point decimals for OCaml, with 8 fractional digits, stored as an immediate
+`int`.
 
-Values are stored as an `int` counting units of 10^-8, so arithmetic is exact and
-allocation-free. Strings such as `"113377.5"` parse and print without rounding
-surprises. Values with more than 8 fractional digits are truncated toward zero on
-parse.
+Prices, quantities and money amounts arrive as decimal strings such as `"113377.5"`.
+Binary floats cannot hold most of them exactly; `fixed-decimal` stores each value as an
+`int` counting units of 10^-8, so addition, comparison and hashing are integer
+operations that never allocate, and strings parse and print without rounding surprises.
+A generative functor gives each kind of quantity its own type, so a price cannot be
+passed where a size is expected. Values with more than 8 fractional digits are truncated
+toward zero by `of_string`, or rejected by `of_string_exact`.
 
-Built with [OxCaml](https://oxcaml.org) and the Core library stack.
+Built with [OxCaml](https://oxcaml.org) and the Core library stack; see
+[Portability](#portability) for what a plain OCaml 5 build would need.
 
 ## API
 
@@ -21,13 +26,16 @@ The library exposes a single module, `Fixed_decimal`:
 A value of type `Make ().t` supports:
 
 - Construction and conversion: `zero`, `one`, `of_int`, `of_units`, `to_units`,
-  `of_float`, `to_float`, `of_string`, `of_string_opt`, `to_string`.
+  `of_float`, `to_float`, `of_string`, `of_string_opt`, `of_string_or_error`,
+  `of_string_exact` (an error instead of truncating digits past the eighth),
+  `to_string`.
 - In-place text: `of_substring_exn s ~pos ~len` parses a field inside a larger string
   (a websocket frame, say) and `blit_to_bytes t buf ~pos` writes the decimal into a
   caller's `Bytes` and returns its length; neither allocates. `string_length` and
   `max_string_length` (21) size the buffer.
-- Arithmetic: `+`, `-`, `neg`, `abs`, `scale`, `sum`, and `mul`, `div`, `div_int`
-  (truncating toward zero).
+- Arithmetic: `+`, `-`, `neg`, `abs`, `scale`, `sum`, `mul`, `div`, `div_int`
+  (truncating toward zero), `mul_round_nearest`, `div_round_nearest` (half away from
+  zero), and `div_or_error`.
 - Predicates and ordering: `is_zero`, `is_positive`, `is_negative`, plus the
   `Comparable` interface; `compare`, `equal`, the operators, `min` and `max` are plain
   `int` comparisons.
@@ -89,6 +97,26 @@ let%expect_test "rounding toward zero" =
 The raw helpers `Fixed_decimal.mul_units` and `Fixed_decimal.div_units` work on unit
 counts directly.
 
+Where truncation is the wrong rule (fees, averages), `mul_round_nearest` and
+`div_round_nearest` round half away from zero instead, and `of_string_exact` refuses a
+string that would lose digits:
+
+```ocaml
+let%expect_test "rounding to nearest and exact parsing" =
+  let two_thirds = Price.div_round_nearest (Price.of_int 2) (Price.of_int 3) in
+  print_s [%sexp (two_thirds : Price.t)];
+  print_s [%sexp (Price.of_string_exact "1.123456789" |> Result.is_ok : bool)];
+  [%expect {|
+    0.66666667
+    false
+    |}]
+;;
+```
+
+`Product` has the same `mul_round_nearest` and `div_round_nearest`, and the raw helpers
+are `mul_units_round_nearest` and `div_units_round_nearest`; a property test holds all of
+them to zarith as well.
+
 ## Floats
 
 `of_float` rounds a binary float to the nearest unit, so it can disagree with the
@@ -148,6 +176,9 @@ The `ocaml` blocks above are copied verbatim from `test/test_readme.ml`, where t
 as expect tests; `dune test` fails if a block here stops matching that file. (mdx is
 not used: the OxCaml opam repository only offers it with an older compiler.)
 
+`examples/notional.ml` is the worked example from the top of `fixed_decimal.mli`; it is
+built, and its output checked, by `dune test`.
+
 ## Build
 
 ```sh
@@ -156,6 +187,49 @@ opam install . --deps-only --with-test
 dune build && dune test
 ```
 
-CI installs the opam dependencies through the shared
-[ox-setup](https://github.com/winterchill-trading/infra/blob/main/docs/ci.md) action, which
-caches the built opam switch between runs.
+## Portability
+
+The library needs the OxCaml compiler (`ocaml-variants.5.2.0+ox`) and the Jane Street
+`v0.18~preview` packages, which exist only in the
+[OxCaml opam repository](https://github.com/oxcaml/opam-repository). OxCaml-only
+constructs:
+
+| Construct | Where | Plain OCaml 5 replacement |
+| --- | --- | --- |
+| `type t : immediate` (layout annotation) | `S.t` | `type t [@@immediate]` |
+| `[@@zero_alloc]`, `[@zero_alloc]` | signatures and hot functions | drop (checks only) |
+| `let mutable` | parser, printer, long division | `ref` cells (flambda removes them) |
+| unboxed tuples `#(a, b)` | printer helper `frac_digits` | a boxed pair or two functions |
+| `[@cold]` | error paths | drop (an inlining hint) |
+
+A plain OCaml 5.x build is possible with these mechanical rewrites and a Core v0.17
+dependency, at the cost of the allocation checks; none of it is done here. The public
+interface uses only the layout annotation and the `[@@zero_alloc]` attributes.
+
+## Known gaps
+
+- The range is that of a 63-bit `int` in 10^-8 units, about +/- 4.6 * 10^10. Larger
+  values fail to parse. A wider range needs a second representation (two `int`s or an
+  `int64#` pair) and a decision on which instances pay for it, so it is left open.
+- The number of fractional digits is fixed at 8 for every instance. A per-instance scale
+  (`Make (struct let decimals = 6 end)`) changes every unit helper and would make
+  `Product` scale-aware; it is a design change, not a bounded fix.
+
+## Releasing
+
+Not published to opam yet. The planned flow, with
+[dune-release](https://github.com/tarides/dune-release):
+
+1. Move the `Unreleased` entries in `CHANGES.md` under a new version heading.
+2. `dune-release tag` creates the `v<version>` tag from that heading.
+3. `dune-release distrib`, then `dune-release publish` and `dune-release opam pkg` /
+   `opam submit` against the OxCaml opam repository (the dependencies do not exist in the
+   default opam repository).
+
+The version comes from the tag through `dune subst`; it is not written anywhere else.
+
+## Used by
+
+Inside the same organisation: `exchange-core`, `order-book`, `money`, `market-data`,
+`price-anchor`, `equities-core`, the Hyperliquid, Binance and Bybit protocol libraries,
+and the simulators and clients built on them.
