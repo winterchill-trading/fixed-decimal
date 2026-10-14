@@ -166,6 +166,18 @@ module type S = sig
   (** [div], returning an error instead of raising when [b] is zero. *)
   val div_or_error : t -> t -> t Or_error.t
 
+  (** [mul_round_nearest a b] is [a * b] rounded half away from zero to the nearest unit,
+      where {!mul} truncates. Does not overflow for any result in range. *)
+  val mul_round_nearest : t -> t -> t
+  [@@zero_alloc]
+
+  (** [div_round_nearest a b] is [a / b] rounded half away from zero to the nearest unit,
+      where {!div} truncates.
+
+      Raises if [b] is zero. *)
+  val div_round_nearest : t -> t -> t
+  [@@zero_alloc]
+
   (** The sum of a list ([zero] for the empty list); wraps around on overflow. *)
   val sum : t list -> t
 
@@ -214,6 +226,18 @@ val mul_units : int -> int -> int
 val div_units : int -> int -> int
 [@@zero_alloc]
 
+(** [mul_units_round_nearest a b] is [a * b / 10^8] rounded half away from zero, without
+    overflowing intermediates. *)
+val mul_units_round_nearest : int -> int -> int
+[@@zero_alloc]
+
+(** [div_units_round_nearest a b] is [a * 10^8 / b] rounded half away from zero, without
+    overflowing intermediates.
+
+    Raises if [b = 0]. *)
+val div_units_round_nearest : int -> int -> int
+[@@zero_alloc]
+
 (** Products and quotients across three instances, e.g. [Product (Price) (Size) (Usd)] for
     notional values. *)
 module Product (A : S) (B : S) (C : S) : sig
@@ -225,6 +249,14 @@ module Product (A : S) (B : S) (C : S) : sig
 
       Raises if [b] is zero. *)
   val div : C.t -> B.t -> A.t
+  [@@zero_alloc]
+
+  (** [mul], rounded half away from zero instead of truncated. *)
+  val mul_round_nearest : A.t -> B.t -> C.t
+  [@@zero_alloc]
+
+  (** [div], rounded half away from zero instead of truncated. Raises if [b] is zero. *)
+  val div_round_nearest : C.t -> B.t -> A.t
   [@@zero_alloc]
 end
 

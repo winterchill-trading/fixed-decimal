@@ -48,6 +48,8 @@ module type S = sig
   val div : t -> t -> t [@@zero_alloc]
   val div_int : t -> int -> t [@@zero_alloc]
   val div_or_error : t -> t -> t Or_error.t
+  val mul_round_nearest : t -> t -> t [@@zero_alloc]
+  val div_round_nearest : t -> t -> t [@@zero_alloc]
   val sum : t list -> t
   val is_zero : t -> bool [@@zero_alloc]
   val is_positive : t -> bool [@@zero_alloc]
@@ -364,6 +366,55 @@ let[@zero_alloc] div_units a b =
   sign * q
 ;;
 
+let[@zero_alloc] mul_units_round_nearest a b =
+  let sign = if Bool.equal (a < 0) (b < 0) then 1 else -1 in
+  let a = Int.abs a
+  and b = Int.abs b in
+  (* As in [mul_units]; only [a0 * b0] has digits below 10^-8, and its remainder decides
+     the rounding. *)
+  let a1 = a / units_per_one
+  and a0 = a % units_per_one
+  and b1 = b / units_per_one
+  and b0 = b % units_per_one in
+  let low = a0 * b0 in
+  let carry = if 2 * (low % units_per_one) >= units_per_one then 1 else 0 in
+  sign
+  * ((a1 * b1 * units_per_one) + (a1 * b0) + (a0 * b1) + (low / units_per_one) + carry)
+;;
+
+let[@zero_alloc] div_units_round_nearest a b =
+  if b = 0 then raise_division_by_zero ();
+  let sign = if Bool.equal (a < 0) (b < 0) then 1 else -1 in
+  let a = Int.abs a
+  and b = Int.abs b in
+  (* The long division of [div_units], kept separate so that its code and timings stay as
+     they are; the final remainder [r < b] rounds the quotient half away from zero. *)
+  let mutable q = a / b in
+  let mutable r = a % b in
+  for _ = 1 to decimals do
+    if r <= Int.max_value / 10
+    then (
+      let r10 = r * 10 in
+      q <- (q * 10) + (r10 / b);
+      r <- r10 % b)
+    else (
+      let mutable digit = 0 in
+      let mutable acc = 0 in
+      for _ = 1 to 10 do
+        if acc >= b - r
+        then (
+          digit <- digit + 1;
+          acc <- acc - (b - r))
+        else acc <- acc + r
+      done;
+      q <- (q * 10) + digit;
+      r <- acc)
+  done;
+  (* [r >= b - r] is [2r >= b] without overflowing. *)
+  if r >= b - r then q <- q + 1;
+  sign * q
+;;
+
 (* [None] when the digits after the eighth fractional one are all zeros (or absent),
    otherwise the dropped digits. The caller has parsed [s] successfully. *)
 let truncated_digits s =
@@ -470,6 +521,8 @@ module Make () = struct
     else Ok (div_units a b)
   ;;
 
+  let[@zero_alloc] mul_round_nearest a b = mul_units_round_nearest a b
+  let[@zero_alloc] div_round_nearest a b = div_units_round_nearest a b
   let sum = List.fold ~init:0 ~f:Int.( + )
   let[@zero_alloc] is_zero t = Int.equal t 0
   let[@zero_alloc] is_positive t = Int.( > ) t 0
@@ -521,6 +574,14 @@ end
 module Product (A : S) (B : S) (C : S) = struct
   let[@zero_alloc] mul a b = C.of_units (mul_units (A.to_units a) (B.to_units b))
   let[@zero_alloc] div c b = A.of_units (div_units (C.to_units c) (B.to_units b))
+
+  let[@zero_alloc] mul_round_nearest a b =
+    C.of_units (mul_units_round_nearest (A.to_units a) (B.to_units b))
+  ;;
+
+  let[@zero_alloc] div_round_nearest c b =
+    A.of_units (div_units_round_nearest (C.to_units c) (B.to_units b))
+  ;;
 end
 
 module Reference = struct
