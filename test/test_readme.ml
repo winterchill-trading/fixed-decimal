@@ -31,6 +31,16 @@ let%expect_test "rounding toward zero" =
     |}]
 ;;
 
+let%expect_test "rounding to nearest and exact parsing" =
+  let two_thirds = Price.div_round_nearest (Price.of_int 2) (Price.of_int 3) in
+  print_s [%sexp (two_thirds : Price.t)];
+  print_s [%sexp (Price.of_string_exact "1.123456789" |> Result.is_ok : bool)];
+  [%expect {|
+    0.66666667
+    false
+    |}]
+;;
+
 let%expect_test "floats are opt-in" =
   print_s [%sexp (Price.of_float 0.1 [@alert "-lossy"] : Price.t)];
   [%expect {| 0.1 |}]
