@@ -80,6 +80,15 @@ module type S = sig
   (** [of_string], returning [None] instead of raising. *)
   val of_string_opt : string -> t option
 
+  (** [of_string], returning the error instead of raising. *)
+  val of_string_or_error : string -> t Or_error.t
+
+  (** [of_string] without truncation: an error when the string has a non-zero digit after
+      the eighth fractional one (["0.000000015"]), so a value that does not fit in [10^-8]
+      units is reported instead of silently changed. Trailing zeros are fine
+      (["1.0000000000"]). *)
+  val of_string_exact : string -> t Or_error.t
+
   (** [of_substring_exn s ~pos ~len] parses [String.sub s ~pos ~len] with the grammar and
       range of [of_string], in one pass and without allocating, so a frame scanner can
       parse a field in place. Raises on malformed input, on a value outside the range and

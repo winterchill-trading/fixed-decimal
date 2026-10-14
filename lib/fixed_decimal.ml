@@ -24,6 +24,8 @@ module type S = sig
   val of_int : int -> t [@@zero_alloc]
   val of_string : string -> t
   val of_string_opt : string -> t option
+  val of_string_or_error : string -> t Or_error.t
+  val of_string_exact : string -> t Or_error.t
   val of_substring_exn : string -> pos:int -> len:int -> t [@@zero_alloc]
   val to_string : t -> string
   val max_string_length : int
@@ -361,6 +363,19 @@ let[@zero_alloc] div_units a b =
   sign * q
 ;;
 
+(* [None] when the digits after the eighth fractional one are all zeros (or absent),
+   otherwise the dropped digits. The caller has parsed [s] successfully. *)
+let truncated_digits s =
+  match String.index s '.' with
+  | None -> None
+  | Some dot ->
+    let start = dot + 1 + decimals in
+    if start >= String.length s
+       || String.for_all (String.drop_prefix s start) ~f:(Char.equal '0')
+    then None
+    else Some (String.drop_prefix s start)
+;;
+
 let check_decimals decimals' =
   if decimals' < 0 || decimals' > decimals
   then raise_s [%message "Fixed_decimal: decimals out of range" (decimals' : int)]
@@ -379,6 +394,28 @@ module Make () = struct
 
     let[@zero_alloc] of_substring_exn s ~pos ~len = units_of_substring_exn s ~pos ~len
     let of_string s = units_of_substring_exn s ~pos:0 ~len:(String.length s)
+
+    let of_string_or_error s =
+      let units = units_of_substring_or_min s ~pos:0 ~len:(String.length s) in
+      if units <> Int.min_value
+      then Ok units
+      else Or_error.try_with (fun () -> raise_parse_error s ~pos:0 ~len:(String.length s))
+    ;;
+
+    let of_string_exact s =
+      match of_string_or_error s with
+      | Error _ as error -> error
+      | Ok units ->
+        (match truncated_digits s with
+         | None -> Ok units
+         | Some dropped ->
+           Or_error.error_s
+             [%message
+               "Fixed_decimal.of_string_exact: more than 8 fractional digits"
+                 s
+                 (dropped : string)])
+    ;;
+
     let max_string_length = max_string_length
     let[@zero_alloc] string_length t = units_string_length t
     let[@zero_alloc] blit_to_bytes t buf ~pos = units_blit_to_bytes t buf ~pos
