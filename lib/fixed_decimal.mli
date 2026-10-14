@@ -3,13 +3,30 @@
     Decimal strings (e.g. ["113377.5"]) are the usual wire encoding for prices, sizes and
     amounts. Values parsed with more than 8 fractional digits are truncated toward zero.
     The range is +/- 46116860184.27387903 (the magnitude of [max_int] in units of 10^-8);
-    larger values are rejected. *)
+    larger values are rejected.
+
+    Each application of {!Make} is a distinct type, and {!Product} multiplies and divides
+    across three of them:
+
+    {[
+      module Price = Fixed_decimal.Make ()
+      module Size = Fixed_decimal.Make ()
+      module Usd = Fixed_decimal.Make ()
+      module Notional = Fixed_decimal.Product (Price) (Size) (Usd)
+
+      let notional = Notional.mul (Price.of_string "113377.5") (Size.of_string "0.00123")
+      (* Usd.to_string notional = "139.454325" *)
+    ]}
+
+    [examples/notional.ml] builds this example. *)
 
 open! Core
 
 module type S = sig
   (** A count of [10^-8] units. [t] is an immediate [int] at runtime: values are never
-      boxed and arithmetic does not allocate. *)
+      boxed and arithmetic does not allocate. [sexp] and [yojson] use the decimal string
+      of {!to_string}; [t_of_yojson] also accepts JSON integers and (with the rounding of
+      {!of_float}) JSON floats. *)
   type t : immediate [@@deriving sexp, compare, equal, hash, yojson]
 
   include Comparable.S with type t := t
@@ -34,16 +51,33 @@ module type S = sig
   (** Number of units in [one] (10^8). *)
   val units_per_one : int
 
+  (** [0]. *)
   val zero : t
-  val one : t
-  val of_units : int -> t [@@zero_alloc]
-  val to_units : t -> int [@@zero_alloc]
-  val of_int : int -> t [@@zero_alloc]
 
-  (** Parses a decimal string such as ["-12.5"], ["0.001"] or ["100"]. Raises on malformed
-      input or on a value outside the range. *)
+  (** [1] , i.e. {!units_per_one} units. *)
+  val one : t
+
+  (** [of_units n] is [n * 10^-8]; every [int] is a valid unit count. *)
+  val of_units : int -> t
+  [@@zero_alloc]
+
+  (** The number of [10^-8] units in [t]. *)
+  val to_units : t -> int [@@zero_alloc]
+
+  (** [of_int n] is the whole number [n]. It wraps around silently when [n] is outside the
+      range. *)
+  val of_int : int -> t
+  [@@zero_alloc]
+
+  (** Parses a decimal string such as ["-12.5"], ["0.001"] or ["100"]: an optional sign,
+      digits, and an optional ['.'] followed by digits (["5."] and [".5"] are accepted).
+      Digits beyond the eighth fractional one are truncated toward zero. No exponent, no
+      whitespace, no digit separators.
+
+      Raises on malformed input or on a value outside the range. *)
   val of_string : string -> t
 
+  (** [of_string], returning [None] instead of raising. *)
   val of_string_opt : string -> t option
 
   (** [of_substring_exn s ~pos ~len] parses [String.sub s ~pos ~len] with the grammar and
@@ -82,40 +116,72 @@ module type S = sig
       "Fixed_decimal.of_float rounds binary floats and raises on NaN, infinity or out of \
        range input; prefer of_string."]
 
+  (** The float nearest to [t] while [abs (to_units t) <= 2^53] (about 9 * 10^7 whole
+      units); beyond that the result can be one rounding further off. *)
   val to_float : t -> float
-  val ( + ) : t -> t -> t [@@zero_alloc]
+
+  (** Addition. Like [int] addition it wraps around on overflow instead of raising. *)
+  val ( + ) : t -> t -> t
+  [@@zero_alloc]
+
+  (** Subtraction; wraps around on overflow. *)
   val ( - ) : t -> t -> t [@@zero_alloc]
+
+  (** Negation. *)
   val neg : t -> t [@@zero_alloc]
+
+  (** Absolute value. *)
   val abs : t -> t [@@zero_alloc]
-  val scale : t -> by:int -> t [@@zero_alloc]
+
+  (** [scale t ~by] is [t * by] for a whole number [by]; wraps around on overflow. *)
+  val scale : t -> by:int -> t
+  [@@zero_alloc]
 
   (** [mul a b] is [a * b], truncated toward zero. Does not overflow for any result in
       range. *)
   val mul : t -> t -> t
   [@@zero_alloc]
 
-  (** [div a b] is [a / b], truncated toward zero. Raises if [b] is zero. *)
+  (** [div a b] is [a / b], truncated toward zero.
+
+      Raises if [b] is zero. *)
   val div : t -> t -> t
   [@@zero_alloc]
 
-  (** [div_int t n] is [t / n], truncated toward zero. Raises if [n] is zero. *)
+  (** [div_int t n] is [t / n], truncated toward zero.
+
+      Raises if [n] is zero. *)
   val div_int : t -> int -> t
   [@@zero_alloc]
 
+  (** The sum of a list ([zero] for the empty list); wraps around on overflow. *)
   val sum : t list -> t
+
+  (** [t = zero]. *)
   val is_zero : t -> bool [@@zero_alloc]
+
+  (** [t > zero]. *)
   val is_positive : t -> bool [@@zero_alloc]
+
+  (** [t < zero]. *)
   val is_negative : t -> bool [@@zero_alloc]
 
-  (** Truncates toward zero to [decimals] fractional digits, [0 <= decimals <= 8]. *)
+  (** Truncates toward zero to [decimals] fractional digits, [0 <= decimals <= 8].
+
+      Raises if [decimals] is outside [[0, 8]]. *)
   val round_down : t -> decimals:int -> t
   [@@zero_alloc]
 
-  (** Rounds half away from zero to [decimals] fractional digits. *)
+  (** Rounds half away from zero to [decimals] fractional digits.
+
+      Raises if [decimals] is outside [[0, 8]]. *)
   val round_nearest : t -> decimals:int -> t
   [@@zero_alloc]
 end
 
+(** [Make ()] is a fresh fixed-point type. The functor is generative: two applications
+    give incompatible types with the same representation, so a price cannot be passed
+    where a size is expected. *)
 module Make () : S
 
 (** {2 Unit arithmetic}
@@ -130,7 +196,9 @@ val mul_units : int -> int -> int
 [@@zero_alloc]
 
 (** [div_units a b] is [a * 10^8 / b], truncated toward zero, computed by long division so
-    that no intermediate value overflows. Raises if [b = 0]. *)
+    that no intermediate value overflows.
+
+    Raises if [b = 0]. *)
 val div_units : int -> int -> int
 [@@zero_alloc]
 
@@ -141,7 +209,9 @@ module Product (A : S) (B : S) (C : S) : sig
   val mul : A.t -> B.t -> C.t
   [@@zero_alloc]
 
-  (** [div c b] is [c / b] as an [A.t], truncated toward zero. Raises if [b] is zero. *)
+  (** [div c b] is [c / b] as an [A.t], truncated toward zero.
+
+      Raises if [b] is zero. *)
   val div : C.t -> B.t -> A.t
   [@@zero_alloc]
 end
@@ -152,5 +222,6 @@ module Reference : sig
   (** Units of a decimal string, [None] when [S.of_string] would raise. *)
   val units_of_string : string -> int option
 
+  (** The decimal string of a unit count, as [S.to_string] prints it. *)
   val units_to_string : int -> string
 end
