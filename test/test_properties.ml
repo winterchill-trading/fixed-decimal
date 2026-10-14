@@ -12,6 +12,17 @@ let fits z = Z.leq (Z.neg max_units) z && Z.leq z max_units
 let ref_mul a b = Z.div (Z.mul (Z.of_int a) (Z.of_int b)) scale
 let ref_div a b = Z.div (Z.mul (Z.of_int a) scale) (Z.of_int b)
 
+(* [n / d] rounded half away from zero. *)
+let round_nearest n d =
+  let q, r = Z.div_rem n d in
+  if Z.geq (Z.mul (Z.abs r) (Z.of_int 2)) (Z.abs d)
+  then Z.add q (Z.of_int (Z.sign n * Z.sign d))
+  else q
+;;
+
+let ref_mul_nearest a b = round_nearest (Z.mul (Z.of_int a) (Z.of_int b)) scale
+let ref_div_nearest a b = round_nearest (Z.mul (Z.of_int a) scale) (Z.of_int b)
+
 let gen_units =
   let open Quickcheck.Generator in
   weighted_union
@@ -108,6 +119,39 @@ let%test_unit "Product.div matches the reference" =
     gen_div_pair
     ~actual:(fun a b -> Notional.div (Usd.of_units a) (Size.of_units b) |> Price.to_units)
     ~expected:ref_div
+;;
+
+let%test_unit "mul_units_round_nearest is exact rounded multiplication" =
+  check
+    "mul_units_round_nearest"
+    gen_mul_pair
+    ~actual:Fixed_decimal.mul_units_round_nearest
+    ~expected:ref_mul_nearest
+;;
+
+let%test_unit "div_units_round_nearest is exact rounded division" =
+  check
+    ~examples:div_examples
+    "div_units_round_nearest"
+    gen_div_pair
+    ~actual:Fixed_decimal.div_units_round_nearest
+    ~expected:ref_div_nearest
+;;
+
+let%test_unit "Product rounded to nearest matches the reference" =
+  check
+    "Product.mul_round_nearest"
+    gen_mul_pair
+    ~actual:(fun a b ->
+      Notional.mul_round_nearest (Price.of_units a) (Size.of_units b) |> Usd.to_units)
+    ~expected:ref_mul_nearest;
+  check
+    ~examples:div_examples
+    "Product.div_round_nearest"
+    gen_div_pair
+    ~actual:(fun a b ->
+      Notional.div_round_nearest (Usd.of_units a) (Size.of_units b) |> Price.to_units)
+    ~expected:ref_div_nearest
 ;;
 
 let%expect_test "most generated pairs are in range" =
