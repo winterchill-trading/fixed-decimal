@@ -1,0 +1,14 @@
+(executable
+ (name notional)
+ (libraries core fixed_decimal)
+ (preprocess
+  (pps ppx_jane)))
+
+(rule
+ (alias runtest)
+ (action
+  (progn
+   (with-stdout-to
+    notional.output
+    (run %{exe:notional.exe}))
+   (diff notional.expected notional.output))))
