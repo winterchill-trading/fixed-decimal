@@ -312,6 +312,44 @@ let%expect_test "Product mixes instances" =
     {| ((notional -139.454325) (avg_px 113377.5) (raw 300000000) (raw_div 33333333)) |}]
 ;;
 
+let%expect_test "mul and div rounded to nearest" =
+  let open Decimal in
+  let show a b =
+    let a = of_string a
+    and b = of_string b in
+    print_s
+      [%message
+        ""
+          ~mul:(mul a b : t)
+          ~mul_nearest:(mul_round_nearest a b : t)
+          ~div:(div a b : t)
+          ~div_nearest:(div_round_nearest a b : t)]
+  in
+  (* 0.00000001 * 0.5 is exactly half a unit: truncated to 0, rounded away to 1. *)
+  show "0.00000001" "0.5";
+  show "-0.00000001" "0.5";
+  show "2" "3";
+  show "-2" "3";
+  show "0.00000001" "0.49999999";
+  [%expect
+    {|
+    ((mul 0) (mul_nearest 0.00000001) (div 0.00000002) (div_nearest 0.00000002))
+    ((mul 0) (mul_nearest -0.00000001) (div -0.00000002)
+     (div_nearest -0.00000002))
+    ((mul 6) (mul_nearest 6) (div 0.66666666) (div_nearest 0.66666667))
+    ((mul -6) (mul_nearest -6) (div -0.66666666) (div_nearest -0.66666667))
+    ((mul 0) (mul_nearest 0) (div 0.00000002) (div_nearest 0.00000002))
+    |}];
+  print_s
+    [%sexp
+      (Notional.mul_round_nearest (Price.of_string "0.33333333") (Size.of_string "0.5")
+       : Usd.t)
+      , (Notional.div_round_nearest (Usd.of_string "1") (Size.of_string "3") : Price.t)
+      , (Or_error.try_with (fun () -> div_round_nearest one zero) : t Or_error.t)];
+  [%expect
+    {| (0.16666667 0.33333333 (Error "Fixed_decimal.div_units: division by zero")) |}]
+;;
+
 let%expect_test "integer parts beyond 10 digits" =
   let show s =
     printf
