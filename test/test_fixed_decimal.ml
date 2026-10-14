@@ -49,6 +49,55 @@ let%expect_test "invalid strings" =
     |}]
 ;;
 
+let%expect_test "of_string_or_error and of_string_exact" =
+  List.iter
+    [ "1.5"
+    ; "1.123456789"
+    ; "-0.000000015"
+    ; "1.1234567800000"
+    ; "2.000000000000000001"
+    ; "abc"
+    ; "99999999999"
+    ]
+    ~f:(fun s ->
+      print_s
+        [%message
+          s
+            ~or_error:(Decimal.of_string_or_error s : Decimal.t Or_error.t)
+            ~exact:(Decimal.of_string_exact s : Decimal.t Or_error.t)]);
+  [%expect
+    {|
+    (1.5 (or_error (Ok 1.5)) (exact (Ok 1.5)))
+    (1.123456789 (or_error (Ok 1.12345678))
+     (exact
+      (Error
+       ("Fixed_decimal.of_string_exact: more than 8 fractional digits"
+        1.123456789 (dropped 9)))))
+    (-0.000000015 (or_error (Ok -0.00000001))
+     (exact
+      (Error
+       ("Fixed_decimal.of_string_exact: more than 8 fractional digits"
+        -0.000000015 (dropped 5)))))
+    (1.1234567800000 (or_error (Ok 1.12345678)) (exact (Ok 1.12345678)))
+    (2.000000000000000001 (or_error (Ok 2))
+     (exact
+      (Error
+       ("Fixed_decimal.of_string_exact: more than 8 fractional digits"
+        2.000000000000000001 (dropped 0000000001)))))
+    (abc (or_error (Error ("Fixed_decimal.of_string: invalid decimal" abc)))
+     (exact (Error ("Fixed_decimal.of_string: invalid decimal" abc))))
+    (99999999999
+     (or_error
+      (Error
+       ("Fixed_decimal.of_string: value out of range" 99999999999
+        (max 46116860184.27387903))))
+     (exact
+      (Error
+       ("Fixed_decimal.of_string: value out of range" 99999999999
+        (max 46116860184.27387903)))))
+    |}]
+;;
+
 let%expect_test "arithmetic and rounding" =
   let open Decimal in
   let a = of_string "1.5" in
