@@ -163,6 +163,9 @@ module type S = sig
   val div_int : t -> int -> t
   [@@zero_alloc]
 
+  (** [div], returning an error instead of raising when [b] is zero. *)
+  val div_or_error : t -> t -> t Or_error.t
+
   (** The sum of a list ([zero] for the empty list); wraps around on overflow. *)
   val sum : t list -> t
 

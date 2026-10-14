@@ -47,6 +47,7 @@ module type S = sig
   val mul : t -> t -> t [@@zero_alloc]
   val div : t -> t -> t [@@zero_alloc]
   val div_int : t -> int -> t [@@zero_alloc]
+  val div_or_error : t -> t -> t Or_error.t
   val sum : t list -> t
   val is_zero : t -> bool [@@zero_alloc]
   val is_positive : t -> bool [@@zero_alloc]
@@ -461,6 +462,12 @@ module Make () = struct
   let[@zero_alloc] div_int t n =
     if Int.equal n 0 then raise_s [%message "Fixed_decimal.div_int: division by zero"];
     Int.( / ) t n
+  ;;
+
+  let div_or_error a b =
+    if Int.equal b 0
+    then Or_error.error_s [%message "Fixed_decimal.div: division by zero"]
+    else Ok (div_units a b)
   ;;
 
   let sum = List.fold ~init:0 ~f:Int.( + )
