@@ -242,6 +242,36 @@ let%test_unit "of_substring_exn agrees with the reference parser" =
           [%message "of_substring_exn" s (actual : int option) (expected : int option)])
 ;;
 
+let%test_unit "of_string_or_error and of_string_exact agree with of_string_opt" =
+  Quickcheck.test
+    gen_decimal_string
+    ~sexp_of:[%sexp_of: string]
+    ~trials:50_000
+    ~examples:[ "1.123456789"; "1.1234567800"; "-0.000000010"; "5."; ".000000001" ]
+    ~f:(fun s ->
+      let opt = Price.of_string_opt s in
+      let or_error = Price.of_string_or_error s |> Result.ok in
+      let exact = Price.of_string_exact s |> Result.ok in
+      (* Exact parsing accepts a subset, and only strings whose dropped digits are zeros. *)
+      let lossless =
+        match String.lsplit2 s ~on:'.' with
+        | None -> true
+        | Some (_, frac) -> String.for_all (String.drop_prefix frac 8) ~f:(Char.equal '0')
+      in
+      let expected_exact = if lossless then opt else None in
+      if not
+           ([%equal: Price.t option] or_error opt
+            && [%equal: Price.t option] exact expected_exact)
+      then
+        raise_s
+          [%message
+            "of_string variants"
+              s
+              (opt : Price.t option)
+              (or_error : Price.t option)
+              (exact : Price.t option)])
+;;
+
 let%expect_test "generated decimal strings mix valid, invalid and out of range" =
   Quickcheck.random_value
     ~seed:(`Deterministic "fixed-decimal")
