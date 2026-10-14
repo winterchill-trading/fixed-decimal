@@ -228,6 +228,8 @@ Not published to opam yet. The planned flow, with
 
 The version comes from the tag through `dune subst`; it is not written anywhere else.
 
+API docs are built with `dune build @doc` (odoc). CI fails on any odoc warning, so run it before tagging.
+
 ## Used by
 
 Inside the same organisation: `exchange-core`, `order-book`, `money`, `market-data`,
